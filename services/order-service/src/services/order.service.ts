@@ -5,7 +5,7 @@ import { CustomerService } from './customer.service';
 import { ProductService } from './product.service';
 import { PaymentService } from './payment.service';
 import { OrderStatus, PaymentStatus } from '../../../../shared/utils/status';
-import { AppError } from '../../../../shared/utils/errors';
+import { AppError, MONGO_DUPLICATE_KEY_ERROR } from '../../../../shared/utils/errors';
 import logger from '../../../../shared/utils/logger';
 
 export class OrderService {
@@ -57,7 +57,7 @@ export class OrderService {
         orderStatus: OrderStatus.PENDING
       });
     } catch (error: any) {
-      if (error.code === 11000) {
+      if (error.code === MONGO_DUPLICATE_KEY_ERROR) {
         const existing = await this.repository.findByIdempotencyKey(key);
         if (existing) {
           const paymentStatus = existing.orderStatus === OrderStatus.PAID
@@ -71,43 +71,12 @@ export class OrderService {
 
     logger.info(`Order created: ${order._id}`);
 
-    let paymentStatus: PaymentStatus = PaymentStatus.SUCCESS;
-    try {
-      await this.productService.reserveStock(data.productId, quantity);
-      logger.info(`Stock reserved: ${quantity} units for product ${data.productId}`);
-    } catch (error: any) {
-      await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
-      throw new AppError(`Stock reservation failed: ${error.message}`, 409);
-    }
+    await this.productService.reserveStock(data.productId, quantity);
+    logger.info(`Stock reserved: ${quantity} units for product ${data.productId}`);
 
-    try {
-      const paymentResult = await this.paymentService.processPayment({
-        idempotencyKey: key,
-        customerId: data.customerId,
-        orderId: order._id.toString(),
-        amount: data.amount,
-        productId: data.productId
-      });
+    this.processPaymentInBackground(key, data, order._id.toString(), quantity);
 
-      paymentStatus = paymentResult.status;
-
-      if (paymentStatus === PaymentStatus.SUCCESS) {
-        await this.repository.updateStatus(order._id.toString(), OrderStatus.PAID);
-        logger.info(`Order ${order._id} paid successfully`);
-      } else {
-        await this.productService.releaseStock(data.productId, quantity);
-        await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
-        logger.warn(`Order ${order._id} payment failed, stock released`);
-      }
-    } catch (error: any) {
-      await this.productService.releaseStock(data.productId, quantity);
-      await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
-      paymentStatus = PaymentStatus.FAILED;
-      logger.error(`Payment error: ${error.message}`);
-    }
-
-    const updatedOrder = await this.repository.findById(order._id.toString()) as IOrder;
-    return { order: updatedOrder, paymentStatus };
+    return { order, paymentStatus: PaymentStatus.PENDING };
   }
 
   async getOrderById(id: string): Promise<IOrder> {
@@ -154,5 +123,32 @@ export class OrderService {
 
     logger.info(`Order ${id} status updated to ${status}`);
     return updated;
+  }
+
+  private async processPaymentInBackground(key: string, data: {
+    customerId: string;
+    productId: string;
+    amount: number;
+    quantity?: number;
+  }, orderId: string, quantity: number): Promise<void> {
+    try {
+      const paymentResult = await this.paymentService.processPayment({
+        idempotencyKey: key,
+        customerId: data.customerId,
+        orderId,
+        amount: data.amount,
+        productId: data.productId
+      });
+
+      if (paymentResult.status === PaymentStatus.SUCCESS) {
+        logger.info(`Order ${orderId} payment submitted, worker will confirm`);
+      } else {
+        await this.productService.releaseStock(data.productId, quantity);
+        await this.repository.updateStatus(orderId, OrderStatus.FAILED);
+        logger.warn(`Order ${orderId} payment failed, stock released`);
+      }
+    } catch (error: any) {
+      logger.error(`Payment processing error for order ${orderId}: ${error.message}`);
+    }
   }
 }

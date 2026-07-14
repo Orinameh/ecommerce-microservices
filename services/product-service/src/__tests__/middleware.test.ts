@@ -20,6 +20,8 @@ const {
   errorHandler,
 } = await import('../middleware/index');
 
+import { MONGO_DUPLICATE_KEY_ERROR } from '../../../../shared/utils/errors';
+
 function createReqRes() {
   const req: any = {
     headers: {},
@@ -94,7 +96,7 @@ describe('errorHandler (product-service)', () => {
   test('returns 409 for duplicate key error', () => {
     const { req, res } = createReqRes();
     const err: any = new Error('Duplicate key');
-    err.code = 11000;
+    err.code = MONGO_DUPLICATE_KEY_ERROR;
 
     errorHandler(err, req, res, mock(() => {}));
 

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { config } from '../config';
+import { MONGO_DUPLICATE_KEY_ERROR } from '../../../../shared/utils/errors';
 import {
   createSecurityMiddleware,
   createRateLimiter,
@@ -24,7 +25,7 @@ export const loggingMiddleware = createLoggingMiddleware(config.serviceName);
 
 export const errorHandler = createErrorHandler([
   (err: any, req: Request, res: Response) => {
-    if (err.code === 11000) {
+    if (err.code === MONGO_DUPLICATE_KEY_ERROR) {
       res.status(409).json({
         error: 'Duplicate key error',
         message: 'Resource already exists',

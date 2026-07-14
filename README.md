@@ -73,12 +73,15 @@ A microservices-based e-commerce platform with RESTful synchronous communication
 1. **Customer** sends `POST /api/orders` to order-service with `customerId`, `productId`, `amount`
 2. **Order service** validates customer via customer-service (`GET /api/customers/:id`)
 3. **Order service** validates product via product-service (`GET /api/products/:id`)
-4. **Order service** creates order in MongoDB (status: `pending`)
-5. **Order service** reserves stock via product-service (`POST /api/products/reserve`)
-6. **Order service** sends payment request to payment-service with `productId`
-7. **Payment service** creates transaction, publishes to RabbitMQ queue
-8. **Transaction worker** consumes the message, persists to transaction history
-9. **Order service** updates order to `paid` on success, releases stock on failure
+4. **Order service** reserves stock via product-service (`POST /api/products/reserve`)
+5. **Order service** sends payment request to payment-service with `productId`
+6. **Payment service** creates transaction (status: `completed`), publishes to RabbitMQ queue
+7. **Transaction worker** consumes the message, persists to transaction history
+8. **Order service** returns response with `customerId`, `orderId`, `productId`, `orderStatus`, `paymentStatus`
+
+> **Note:** In this implementation, the simulated payment always succeeds, so the
+> order status goes directly to `paid`. In production with a real payment gateway,
+> the order would start as `pending` and update after payment confirmation.
 
 ## Running Locally
 
@@ -107,6 +110,30 @@ cd services/<service-name> && bun test
 # Build for production
 cd services/<service-name> && bun build src/index.ts --outdir ./dist --target node
 ```
+
+## End-to-End Validation
+
+After starting the stack with `docker compose up --build`, run the validation script to verify the full order flow:
+
+```bash
+bash test-flow.sh
+```
+
+This script validates each step of the specification:
+
+| Step | What it tests | Spec Requirement |
+|------|---------------|------------------|
+| 1 | Create order via REST | *"request sent to the order service using REST"* |
+| 2 | Order persisted in DB | *"order saved in the database"* |
+| 3 | Transaction persisted (worker) | *"worker saves queued data in the database transaction history"* |
+| 4 | Idempotency — same key, same order | Prevents duplicate orders |
+| 5 | Missing fields → 400 | Input validation |
+| 6 | Invalid customer → 404 | Error handling |
+| 7 | All not-found endpoints → 404 | Consistent error responses |
+| 8 | Stock decremented atomically | Data integrity |
+| 9 | No duplicate orders created | Idempotency guarantee |
+
+The script cleans all previous orders and transactions before running, so each execution starts from a clean slate.
 
 ## Service Details
 

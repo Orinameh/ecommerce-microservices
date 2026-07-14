@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { catchAsync } from '../../../../shared/utils/middleware';
 import { ApiResponse } from '../../../../shared/utils/response';
 import { OrderService } from '../services/order.service';
-import { OrderStatus } from '../../../../shared/utils/status';
+import { OrderStatus, PaymentStatus } from '../../../../shared/utils/status';
 
 interface Params {
   [key: string]: string;
@@ -46,7 +46,15 @@ export class OrderController {
 
   getOrderById = catchAsync(async (req: Request<Params>, res: Response) => {
     const order = await this.service.getOrderById(req.params.id);
-    ApiResponse.success(res, order);
+    const paymentStatus = order.orderStatus === OrderStatus.PAID
+      ? PaymentStatus.SUCCESS
+      : order.orderStatus === OrderStatus.FAILED
+        ? PaymentStatus.FAILED
+        : PaymentStatus.PENDING;
+    ApiResponse.success(res, {
+      ...order.toJSON(),
+      paymentStatus
+    });
   });
 
   getAllOrders = catchAsync(async (req: Request, res: Response) => {

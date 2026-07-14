@@ -1,3 +1,5 @@
+export const MONGO_DUPLICATE_KEY_ERROR = 11000;
+
 export class AppError extends Error {
   constructor(
     message: string,
