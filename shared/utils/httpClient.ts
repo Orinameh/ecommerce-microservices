@@ -1,7 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
-import { withRetry } from './retry.js';
-import { withCircuitBreaker } from './circuitBreaker.js';
-import logger from './logger.js';
+import { withRetry } from './retry';
+import { withCircuitBreaker } from './circuitBreaker';
+import logger from './logger';
 
 export interface HttpClientConfig {
   baseURL: string;

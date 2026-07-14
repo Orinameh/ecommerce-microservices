@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import logger from './logger.ts';
+import logger from './logger';
 
 export class Database {
   private static instance: Database | null = null;

@@ -1,5 +1,5 @@
 import amqp, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
-import logger from './logger.ts';
+import logger from './logger';
 
 export class RabbitMQ {
   private static instance: RabbitMQ | null = null;
