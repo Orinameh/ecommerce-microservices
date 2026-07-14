@@ -2,33 +2,27 @@ FROM oven/bun:latest AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json bun.lockb* ./
+COPY services/customer-service/package.json services/customer-service/bun.lockb* ./services/customer-service/
+COPY shared/package.json shared/bun.lockb* ./shared/
 
-# Install dependencies
-RUN bun install --frozen-lockfile
+RUN cd services/customer-service && bun install --frozen-lockfile
+RUN cd shared && bun install --frozen-lockfile
 
-# Copy source code
-COPY . .
+COPY shared/ ./shared/
+COPY services/customer-service/ ./services/customer-service/
 
-# Build the application
-RUN bun build src/index.ts --outdir ./dist --target node
+RUN cd services/customer-service && bun build src/index.ts --outdir ./dist --target node --external mongoose
 
-# Production stage
 FROM node:26-alpine AS runner
 
 WORKDIR /app
 
-# Copy built application and dependencies
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY package.json ./
+COPY --from=builder /app/services/customer-service/dist ./dist
+COPY --from=builder /app/services/customer-service/node_modules ./node_modules
+COPY services/customer-service/package.json ./
 
-# Create non-root user
 USER node
 
-# Expose port
 EXPOSE 5001
 
-# Start the application
 CMD ["node", "dist/index.js"]

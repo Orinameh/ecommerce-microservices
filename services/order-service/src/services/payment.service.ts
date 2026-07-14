@@ -6,6 +6,7 @@ export interface PaymentRequest {
   customerId: string;
   orderId: string;
   amount: number;
+  productId: string;
 }
 
 export interface PaymentResponse {

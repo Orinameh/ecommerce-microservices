@@ -39,7 +39,8 @@ const transactionSchema = new Schema<ITransaction>({
     default: 'pending'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  bufferCommands: false,
 });
 
 export const Transaction = mongoose.model<ITransaction>('Transaction', transactionSchema);

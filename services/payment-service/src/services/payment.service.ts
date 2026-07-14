@@ -1,6 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import { HttpClientFactory } from '../../../../shared/utils/httpClient';
-import { config } from '../config';
 import logger from '../../../../shared/utils/logger';
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { RabbitMQService } from './rabbitmq.service';
@@ -8,13 +6,6 @@ import { RabbitMQService } from './rabbitmq.service';
 export class PaymentService {
   private repository: TransactionRepository;
   private rabbitmq: RabbitMQService;
-  private orderClient = HttpClientFactory.getClient({
-    baseURL: config.orderServiceUrl,
-    serviceName: 'order-service',
-    timeout: 3000,
-    maxRetries: 2,
-    retryDelay: 500
-  });
 
   constructor() {
     this.repository = new TransactionRepository();
@@ -25,6 +16,7 @@ export class PaymentService {
     customerId: string;
     orderId: string;
     amount: number;
+    productId?: string;
     idempotencyKey?: string;
   }): Promise<{ status: string; transactionId: string }> {
     const key = data.idempotencyKey || uuidv4();
@@ -53,23 +45,15 @@ export class PaymentService {
     if (paymentSuccess) {
       await this.repository.updateStatus(transaction._id.toString(), 'completed');
 
-      let productId: string | undefined;
-
-      try {
-        const order = await this.orderClient.get<any>(`/api/orders/${data.orderId}`);
-        if (order && order.productId) {
-          await this.repository.updateProductId(transaction._id.toString(), order.productId);
-          productId = order.productId;
-        }
-      } catch (error) {
-        logger.warn('Could not fetch productId from order service');
+      if (data.productId) {
+        await this.repository.updateProductId(transaction._id.toString(), data.productId);
       }
 
       await this.rabbitmq.publishTransaction({
         transactionId: transaction._id.toString(),
         customerId: data.customerId,
         orderId: data.orderId,
-        productId,
+        productId: data.productId,
         amount: data.amount,
         idempotencyKey: key
       });

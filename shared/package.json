@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "amqplib": "^2.0.1",
-    "axios": "^1.18.1",
-    "mongoose": "^9.7.4",
-    "winston": "^3.19.0"
+    "axios": "^1.18.1"
   }
 }

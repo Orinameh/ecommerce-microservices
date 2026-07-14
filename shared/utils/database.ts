@@ -36,14 +36,15 @@ export class Database {
 
   private async doConnect(uri: string): Promise<void> {
     try {
+      mongoose.set('bufferCommands', false);
+
       await mongoose.connect(uri, {
         maxPoolSize: 10,
-        minPoolSize: 2,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
         family: 4,
       } as mongoose.ConnectOptions);
-      
+
       this.isConnected = true;
       logger.info('Database connected successfully');
       

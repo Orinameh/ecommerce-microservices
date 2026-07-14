@@ -15,7 +15,7 @@ export class PaymentController {
 
   processPayment = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { customerId, orderId, amount, idempotencyKey } = req.body;
+      const { customerId, orderId, amount, productId, idempotencyKey } = req.body;
 
       if (!customerId || !orderId || !amount) {
         res.status(400).json({
@@ -28,6 +28,7 @@ export class PaymentController {
         customerId,
         orderId,
         amount,
+        productId,
         idempotencyKey
       });
 

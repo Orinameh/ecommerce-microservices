@@ -35,7 +35,8 @@ const orderSchema = new Schema<IOrder>({
     default: 'pending'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  bufferCommands: false,
 });
 
 export const Order = mongoose.model<IOrder>('Order', orderSchema);

@@ -24,7 +24,8 @@ const customerSchema = new Schema<ICustomer>({
     match: /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  bufferCommands: false,
 });
 
 export const Customer = mongoose.model<ICustomer>('Customer', customerSchema);

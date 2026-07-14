@@ -77,7 +77,8 @@ export class OrderService {
         idempotencyKey: key,
         customerId: data.customerId,
         orderId: order._id.toString(),
-        amount: data.amount
+        amount: data.amount,
+        productId: data.productId
       });
 
       paymentStatus = paymentResult.status;

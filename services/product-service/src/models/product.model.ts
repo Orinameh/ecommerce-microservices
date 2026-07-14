@@ -34,7 +34,8 @@ const productSchema = new Schema<IProduct>({
     default: 0
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  bufferCommands: false,
 });
 
 export const Product = mongoose.model<IProduct>('Product', productSchema);

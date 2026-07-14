@@ -36,7 +36,8 @@ export class OrderController {
         customerId: result.order.customerId,
         orderId: result.order._id,
         productId: result.order.productId,
-        orderStatus: result.order.orderStatus
+        orderStatus: result.order.orderStatus,
+        paymentStatus: result.paymentStatus
       };
 
       res.status(201).json(response);
