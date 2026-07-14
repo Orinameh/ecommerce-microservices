@@ -150,3 +150,4 @@ For a more robust microservices in production, we add
 - An api gateway
 - Manage the containers with kubernetes
 - Automate deployment with ci/cd using github workflows and argocd
+- LGTM stack for logs, tracing and metrics

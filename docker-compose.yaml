@@ -29,8 +29,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -49,11 +49,11 @@ services:
     container_name: customer-service
     restart: always
     ports:
-      - "5001:5001"
+      - "${CUSTOMER_SERVICE_PORT:-5001}:5001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=5001
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin
+      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -68,11 +68,11 @@ services:
     container_name: product-service
     restart: always
     ports:
-      - "5002:5002"
+      - "${PRODUCT_SERVICE_PORT:-5002}:5002"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=5002
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin
+      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -87,11 +87,11 @@ services:
     container_name: order-service
     restart: always
     ports:
-      - "5003:5003"
+      - "${ORDER_SERVICE_PORT:-5003}:5003"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=5003
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin
+      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
       - CUSTOMER_SERVICE_URL=http://customer-service:5001
       - PRODUCT_SERVICE_URL=http://product-service:5002
       - PAYMENT_SERVICE_URL=http://payment-service:5004
@@ -115,12 +115,12 @@ services:
     container_name: payment-service
     restart: always
     ports:
-      - "5004:5004"
+      - "${PAYMENT_SERVICE_PORT:-5004}:5004"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=5004
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://rabbitmq:5672}
       - ORDER_SERVICE_URL=http://order-service:5003
     depends_on:
       mongodb:
@@ -139,9 +139,9 @@ services:
     restart: always
     command: node dist/workers/transaction.worker.js
     environment:
-      - NODE_ENV=production
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - NODE_ENV=${NODE_ENV:-production}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://rabbitmq:5672}
       - ORDER_SERVICE_URL=http://order-service:5003
     depends_on:
       mongodb:
