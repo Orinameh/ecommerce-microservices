@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { config } from '../config/index';
+import { config } from '../config';
 import logger from '../../../../shared/utils/logger';
 
 // Security middleware
@@ -24,21 +24,21 @@ export const securityMiddleware = [
   cors({
     origin: config.corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Idempotency-Key'],
     exposedHeaders: ['X-Request-Id'],
     credentials: true,
-    maxAge: 86400 // 24 hours
+    maxAge: 86400
   }),
   express.json({ limit: '10mb' }),
   express.urlencoded({ extended: true, limit: '10mb' })
 ];
 
-// Rate limiter
+// Stricter rate limiter for order creation
 export const rateLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.max,
   message: {
-    error: 'Too many requests from this IP, please try again later.',
+    error: 'Too many order requests from this IP, please try again later.',
     retryAfter: `${config.rateLimit.windowMs / 60000} minutes`
   },
   standardHeaders: true,
@@ -48,6 +48,22 @@ export const rateLimiter = rateLimit({
     return req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
   }
 });
+
+// Idempotency middleware
+export const idempotencyMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.method === 'POST') {
+    const idempotencyKey = req.headers['idempotency-key'] || req.body.idempotencyKey;
+    
+    if (!idempotencyKey) {
+      // Generate one if not provided
+      (req as any).generatedIdempotencyKey = `ik_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      req.body.idempotencyKey = (req as any).generatedIdempotencyKey;
+    } else {
+      (req as any).idempotencyKey = idempotencyKey;
+    }
+  }
+  next();
+};
 
 // Logging middleware
 export const loggingMiddleware = (req: Request, res: Response, next: NextFunction): void => {
@@ -59,7 +75,8 @@ export const loggingMiddleware = (req: Request, res: Response, next: NextFunctio
     requestId,
     ip: req.ip,
     userAgent: req.get('user-agent'),
-    contentType: req.get('content-type')
+    contentType: req.get('content-type'),
+    idempotencyKey: req.headers['idempotency-key'] || req.body.idempotencyKey
   });
 
   // Capture response
@@ -83,7 +100,7 @@ export const loggingMiddleware = (req: Request, res: Response, next: NextFunctio
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
   const requestId = (req as any).requestId || 'unknown';
   
-  logger.error('Unhandled error:', {
+  logger.error('❌ Unhandled error:', {
     requestId,
     error: err.message,
     stack: err.stack,
@@ -94,6 +111,27 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   const isProduction = config.nodeEnv === 'production';
   
+  // Handle specific error types
+  if (err.message?.includes('Insufficient stock')) {
+    res.status(409).json({
+      error: 'Insufficient stock',
+      message: err.message,
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (err.message?.includes('circuit open') || err.message?.includes('unavailable')) {
+    res.status(503).json({
+      error: 'Service temporarily unavailable',
+      message: err.message,
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
   res.status(err.status || 500).json({
     error: isProduction ? 'Internal server error' : err.message,
     requestId,
@@ -141,22 +179,41 @@ export const timeoutMiddleware = (timeout: number = config.timeout) => {
   };
 };
 
-// Validation middleware
-export const validateRequest = (schema: any) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      const { error } = schema.validate(req.body);
-      if (error) {
-        res.status(400).json({
-          error: 'Validation failed',
-          details: error.details.map((d: any) => d.message),
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
+// Validate order request
+export const validateOrderRequest = (req: Request, res: Response, next: NextFunction): void => {
+  const { customerId, productId, amount, quantity } = req.body;
+  
+  if (!customerId) {
+    res.status(400).json({
+      error: 'Missing customerId',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (!productId) {
+    res.status(400).json({
+      error: 'Missing productId',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (!amount || amount <= 0) {
+    res.status(400).json({
+      error: 'Amount must be greater than 0',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (quantity && quantity <= 0) {
+    res.status(400).json({
+      error: 'Quantity must be greater than 0',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  next();
 };

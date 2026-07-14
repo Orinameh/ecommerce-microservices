@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
-import { CustomerService } from '../services/CustomerService';
+import { CustomerService } from '../services/customer.service';
 import logger from '../../../../shared/utils/logger';
 
+interface RouteParams {
+  id: string;
+}
 export class CustomerController {
   private service: CustomerService;
 
@@ -9,9 +12,9 @@ export class CustomerController {
     this.service = new CustomerService();
   }
 
-  getCustomerById = async (req: Request, res: Response): Promise<void> => {
+  getCustomerById = async (req: Request<RouteParams>, res: Response): Promise<void> => {
     try {
-      const customer = await this.service.getCustomerById(req.params.id as string);
+      const customer = await this.service.getCustomerById(req.params.id);
       res.status(200).json(customer);
     } catch (error: any) {
       logger.error('Error in getCustomerById:', error);
@@ -23,7 +26,7 @@ export class CustomerController {
     }
   };
 
-  getAllCustomers = async (req: Request, res: Response): Promise<void> => {
+  getAllCustomers = async (req: Request<RouteParams>, res: Response): Promise<void> => {
     try {
       const customers = await this.service.getAllCustomers();
       res.status(200).json(customers);
@@ -33,7 +36,7 @@ export class CustomerController {
     }
   };
 
-  createCustomer = async (req: Request, res: Response): Promise<void> => {
+  createCustomer = async (req: Request<RouteParams>, res: Response): Promise<void> => {
     try {
       const customer = await this.service.createCustomer(req.body);
       res.status(201).json(customer);
@@ -47,9 +50,9 @@ export class CustomerController {
     }
   };
 
-  updateCustomer = async (req: Request, res: Response): Promise<void> => {
+  updateCustomer = async (req: Request<RouteParams>, res: Response): Promise<void> => {
     try {
-      const customer = await this.service.updateCustomer(req.params.id as string, req.body);
+      const customer = await this.service.updateCustomer(req.params.id, req.body);
       res.status(200).json(customer);
     } catch (error: any) {
       logger.error('Error in updateCustomer:', error);
@@ -61,9 +64,9 @@ export class CustomerController {
     }
   };
 
-  deleteCustomer = async (req: Request, res: Response): Promise<void> => {
+  deleteCustomer = async (req: Request<RouteParams>, res: Response): Promise<void> => {
     try {
-      await this.service.deleteCustomer(req.params.id as string);
+      await this.service.deleteCustomer(req.params.id);
       res.status(204).send();
     } catch (error: any) {
       logger.error('Error in deleteCustomer:', error);

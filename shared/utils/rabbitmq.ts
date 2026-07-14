@@ -19,7 +19,6 @@ export class RabbitMQ {
 
   async connect(url: string): Promise<void> {
     if (this.isConnected && this.connection) {
-      logger.info('RabbitMQ already connected');
       return;
     }
 
@@ -35,15 +34,12 @@ export class RabbitMQ {
 
   private async doConnect(url: string): Promise<void> {
     try {
-      // Connect to RabbitMQ — amqplib 0.10+/2.x returns a ChannelModel
       this.connection = await amqp.connect(url);
 
-      // Create channel
       this.channel = await this.connection.createChannel();
 
       this.isConnected = true;
 
-      // serverProperties lives on the nested raw Connection, not on ChannelModel itself
       const serverProps = this.connection.connection.serverProperties;
       logger.info('RabbitMQ connected successfully', {
         product: serverProps?.product || 'unknown',
@@ -51,7 +47,6 @@ export class RabbitMQ {
         platform: serverProps?.platform || 'unknown'
       });
 
-      // ChannelModel emits these events (forwarded from the underlying connection)
       this.connection.on('error', (error: Error) => {
         logger.error('RabbitMQ connection error:', error);
         this.isConnected = false;
@@ -115,13 +110,12 @@ export class RabbitMQ {
     }
   }
 
-  async consume(queueName: string, callback: (data: any) => Promise<void>): Promise<void> {
+  async consume(queueName: string, callback: (data: any) => Promise<void>, maxRetries: number = 3): Promise<void> {
     if (!this.channel) {
       throw new Error('Channel not initialized. Call connect() first.');
     }
 
     try {
-      // Set prefetch to 1 for fair distribution
       await this.channel.prefetch(1);
 
       await this.channel.consume(queueName, async (msg: ConsumeMessage | null) => {
@@ -132,9 +126,32 @@ export class RabbitMQ {
             await callback(data);
             this.channel!.ack(msg);
           } catch (error) {
-            logger.error('Error processing message:', error);
-            // Reject and requeue for retry
-            this.channel!.nack(msg, false, true);
+            if (error instanceof SyntaxError) {
+              logger.error('Malformed message, discarding:', error);
+              this.channel!.nack(msg, false, false);
+              return;
+            }
+
+            let retryCount = 0;
+            try {
+              const data = JSON.parse(msg.content.toString());
+              retryCount = (data._retryCount as number) || 0;
+            } catch {}
+
+            if (retryCount >= maxRetries - 1) {
+              logger.error(`Message failed after ${maxRetries} attempts, discarding`);
+              this.channel!.nack(msg, false, false);
+              return;
+            }
+
+            const data = JSON.parse(msg.content.toString());
+            data._retryCount = retryCount + 1;
+            this.channel!.sendToQueue(queueName, Buffer.from(JSON.stringify(data)), {
+              persistent: true,
+              contentType: 'application/json'
+            });
+            this.channel!.ack(msg);
+            logger.warn(`Message requeued with retry ${retryCount + 1}/${maxRetries}`);
           }
         }
       }, { noAck: false });
@@ -174,7 +191,6 @@ export class RabbitMQ {
         return false;
       }
 
-      // Cheap round-trip against the default exchange — throws if the channel/connection is dead
       await this.channel.checkExchange('');
       return true;
     } catch (error) {
@@ -182,7 +198,6 @@ export class RabbitMQ {
     }
   }
 
-  // Reset connection (for testing)
   async reset(): Promise<void> {
     await this.close();
     this.connectionPromise = null;

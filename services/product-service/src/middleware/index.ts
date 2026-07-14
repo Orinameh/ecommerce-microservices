@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { config } from '../config/index';
+import { config } from '../config';
 import logger from '../../../../shared/utils/logger';
 
 // Security middleware
@@ -27,13 +27,13 @@ export const securityMiddleware = [
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
     exposedHeaders: ['X-Request-Id'],
     credentials: true,
-    maxAge: 86400 // 24 hours
+    maxAge: 86400
   }),
   express.json({ limit: '10mb' }),
   express.urlencoded({ extended: true, limit: '10mb' })
 ];
 
-// Rate limiter
+// Stricter rate limiter for stock operations
 export const rateLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.max,
@@ -49,12 +49,23 @@ export const rateLimiter = rateLimit({
   }
 });
 
+// Stock operation rate limiter (stricter)
+export const stockRateLimiter = rateLimit({
+  windowMs: 60000, // 1 minute
+  max: 10, // 10 stock operations per minute
+  message: {
+    error: 'Too many stock operations from this IP, please try again later.',
+    retryAfter: '1 minute'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Logging middleware
 export const loggingMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const start = Date.now();
   const requestId = (req as any).requestId || 'unknown';
   
-  // Log request
   logger.info(`📥 ${req.method} ${req.originalUrl}`, {
     requestId,
     ip: req.ip,
@@ -62,7 +73,6 @@ export const loggingMiddleware = (req: Request, res: Response, next: NextFunctio
     contentType: req.get('content-type')
   });
 
-  // Capture response
   res.on('finish', () => {
     const duration = Date.now() - start;
     const statusCode = res.statusCode;
@@ -83,7 +93,7 @@ export const loggingMiddleware = (req: Request, res: Response, next: NextFunctio
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
   const requestId = (req as any).requestId || 'unknown';
   
-  logger.error('Unhandled error:', {
+  logger.error('❌ Unhandled error:', {
     requestId,
     error: err.message,
     stack: err.stack,
@@ -94,6 +104,27 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   const isProduction = config.nodeEnv === 'production';
   
+  // Handle specific error types
+  if (err.code === 11000) {
+    res.status(409).json({
+      error: 'Duplicate key error',
+      message: 'Resource already exists',
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (err.name === 'ValidationError') {
+    res.status(400).json({
+      error: 'Validation error',
+      message: err.message,
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
   res.status(err.status || 500).json({
     error: isProduction ? 'Internal server error' : err.message,
     requestId,
@@ -141,22 +172,25 @@ export const timeoutMiddleware = (timeout: number = config.timeout) => {
   };
 };
 
-// Validation middleware
-export const validateRequest = (schema: any) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      const { error } = schema.validate(req.body);
-      if (error) {
-        res.status(400).json({
-          error: 'Validation failed',
-          details: error.details.map((d: any) => d.message),
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
+// Stock validation middleware
+export const validateStockOperation = (req: Request, res: Response, next: NextFunction): void => {
+  const { productId, quantity } = req.body;
+  
+  if (!productId) {
+    res.status(400).json({
+      error: 'Missing productId',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  if (!quantity || quantity <= 0) {
+    res.status(400).json({
+      error: 'Quantity must be greater than 0',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  next();
 };

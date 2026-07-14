@@ -14,7 +14,7 @@ export class RetryHandler {
     initialDelay: 1000,
     maxDelay: 30000,
     backoffFactor: 2,
-    retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'NetworkError', '503', '500']
+    retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'NetworkError', '503']
   };
 
   static async execute<T>(
@@ -32,8 +32,7 @@ export class RetryHandler {
         return await fn();
       } catch (error: any) {
         lastError = error;
-        
-        // Check if error is retryable
+
         const isRetryable = opts.retryableErrors.some(err => 
           error.message?.includes(err) || 
           error.code?.includes(err) ||

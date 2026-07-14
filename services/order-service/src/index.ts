@@ -1,29 +1,26 @@
 import express from 'express';
 import { Database } from '../../../shared/utils/database';
 import { config } from './config';
-import { 
-  securityMiddleware, 
-  rateLimiter, 
-  loggingMiddleware, 
+import {
+  securityMiddleware,
+  rateLimiter,
+  loggingMiddleware,
   errorHandler,
   notFoundHandler,
   requestIdMiddleware,
   timeoutMiddleware
 } from './middleware';
-import customerRoutes from './routes/customer.route';
-import { CustomerService } from './services/customer.service';
+import orderRoutes from './routes/order.route';
 import logger from '../../../shared/utils/logger';
 
 const app = express();
 
-// Apply middleware
 app.use(requestIdMiddleware);
 app.use(securityMiddleware);
 app.use(rateLimiter);
 app.use(loggingMiddleware);
 app.use(timeoutMiddleware(30000));
 
-// Routes
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
@@ -33,23 +30,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.use('/api', customerRoutes);
+app.use('/api', orderRoutes);
 
-// Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
 const startServer = async () => {
   try {
-    // Connect to database
     await Database.getInstance().connect(config.mongodbUri);
-    
-    // Seed default data
-    const customerService = new CustomerService();
-    await customerService.seedDefaultCustomer();
 
-    // Start listening
     app.listen(config.port, () => {
       logger.info(`${config.serviceName} running on port ${config.port}`);
     });
@@ -61,7 +50,6 @@ const startServer = async () => {
 
 startServer();
 
-// Graceful shutdown
 const gracefulShutdown = async () => {
   logger.info('Shutting down...');
   await Database.getInstance().disconnect();

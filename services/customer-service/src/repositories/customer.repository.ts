@@ -1,4 +1,4 @@
-import { ICustomer, Customer } from "../model/Customer";
+import { ICustomer, Customer } from "../models/customer.model";
 import logger from "../../../../shared/utils/logger";
 
 export class CustomerRepository {

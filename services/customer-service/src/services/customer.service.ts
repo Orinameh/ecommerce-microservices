@@ -1,5 +1,5 @@
-import { CustomerRepository } from '../repositories/CustomerRepository';
-import { ICustomer } from '../model/Customer';
+import { CustomerRepository } from '../repositories/customer.repository';
+import { ICustomer } from '../models/customer.model';
 
 export class CustomerService {
   private repository: CustomerRepository;

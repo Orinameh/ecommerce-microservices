@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # MongoDB Database
   mongodb:
     image: mongo:7.0
     container_name: ecommerce-mongodb
@@ -21,6 +22,7 @@ services:
       timeout: 5s
       retries: 5
 
+  # RabbitMQ Message Broker
   rabbitmq:
     image: rabbitmq:4.0-management-alpine
     container_name: ecommerce-rabbitmq
@@ -41,8 +43,11 @@ services:
       timeout: 5s
       retries: 5
 
+  # Customer Service
   customer-service:
-    build: ./services/customer-service
+    build: 
+      context: ./services/customer-service
+      dockerfile: Dockerfile
     container_name: customer-service
     restart: always
     ports:
@@ -57,8 +62,11 @@ services:
     networks:
       - ecommerce-network
 
+  # Product Service
   product-service:
-    build: ./services/product-service
+    build: 
+      context: ./services/product-service
+      dockerfile: Dockerfile
     container_name: product-service
     restart: always
     ports:
@@ -73,8 +81,11 @@ services:
     networks:
       - ecommerce-network
 
+  # Order Service
   order-service:
-    build: ./services/order-service
+    build: 
+      context: ./services/order-service
+      dockerfile: Dockerfile
     container_name: order-service
     restart: always
     ports:
@@ -89,11 +100,20 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      customer-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
     networks:
       - ecommerce-network
 
+  # Payment Service
   payment-service:
-    build: ./services/payment-service
+    build: 
+      context: ./services/payment-service
+      dockerfile: Dockerfile
     container_name: payment-service
     restart: always
     ports:
@@ -109,14 +129,19 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      order-service:
+        condition: service_started
     networks:
       - ecommerce-network
 
+  # Transaction Worker (runs separately)
   transaction-worker:
-    build: ./services/payment-service
+    build: 
+      context: ./services/payment-service
+      dockerfile: Dockerfile
     container_name: transaction-worker
     restart: always
-    command: node dist/workers/TransactionWorker.js
+    command: node dist/workers/transaction.worker.js
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin
@@ -127,6 +152,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      payment-service:
+        condition: service_started
+      order-service:
+        condition: service_started
     networks:
       - ecommerce-network
 
