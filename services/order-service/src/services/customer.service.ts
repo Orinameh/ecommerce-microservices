@@ -18,6 +18,13 @@ export class CustomerService {
   });
 
   async validateCustomer(customerId: string): Promise<Customer> {
-    return await this.client.get<Customer>(`/api/customers/${customerId}`);
+    try {
+      return await this.client.get<Customer>(`/api/customers/${customerId}`);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`Customer not found: ${customerId}`);
+      }
+      throw error;
+    }
   }
 }

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { ICustomer, Customer } from "../models/customer.model";
 import logger from "../../../../shared/utils/logger";
 
@@ -16,6 +17,7 @@ export class CustomerRepository {
   // Find customer by Id
   async findById(id: string): Promise<ICustomer | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Customer.findById(id);
     } catch (error) {
       logger.error("Error finding customer by ID:", error);
@@ -48,6 +50,7 @@ export class CustomerRepository {
     data: Partial<ICustomer>,
   ): Promise<ICustomer | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Customer.findByIdAndUpdate(id, data, { new: true });
     } catch (error) {
       logger.error("Error updating customer:", error);
@@ -57,6 +60,7 @@ export class CustomerRepository {
 
   async delete(id: string): Promise<boolean> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return false;
       const result = await Customer.findByIdAndDelete(id);
       return result !== null;
     } catch (error) {

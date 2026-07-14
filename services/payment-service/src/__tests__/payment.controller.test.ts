@@ -10,6 +10,7 @@ mock.module('mongoose', () => {
   };
 });
 
+const { TransactionStatus } = await import('../../../../shared/utils/status');
 const { PaymentController } = await import('../controllers/payment.controller');
 
 const mockResult = { status: 'success', transactionId: 'txn_1' };
@@ -28,8 +29,8 @@ function createController(overrides: Record<string, any> = {}) {
   const ctrl = new PaymentController();
   (ctrl as any).service = {
     processPayment: mock(() => Promise.resolve(mockResult)),
-    getTransactionById: mock(() => Promise.resolve({ _id: 'tid', customerId: 'c1', orderId: 'o1', amount: 100, status: 'completed' })),
-    getAllTransactions: mock(() => Promise.resolve([{ _id: 'tid', status: 'completed' }])),
+    getTransactionById: mock(() => Promise.resolve({ _id: 'tid', customerId: 'c1', orderId: 'o1', amount: 100, status: TransactionStatus.COMPLETED })),
+    getAllTransactions: mock(() => Promise.resolve([{ _id: 'tid', status: TransactionStatus.COMPLETED }])),
     ...overrides,
   };
   return ctrl;

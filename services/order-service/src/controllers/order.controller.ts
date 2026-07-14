@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { OrderService } from '../services/order.service';
+import { OrderStatus } from '../../../../shared/utils/status';
 import logger from '../../../../shared/utils/logger';
 
 interface Params {
@@ -45,7 +46,9 @@ export class OrderController {
       logger.error('Error in createOrder:', error);
       if (error.message.includes('Stock reservation failed')) {
         res.status(409).json({ error: error.message });
-      } else if (error.message.includes('Product out of stock')) {
+      } else if (error.message.includes('Insufficient stock') || error.message.includes('Product out of stock')) {
+        res.status(400).json({ error: error.message });
+      } else if (error.message.includes('not found')) {
         res.status(400).json({ error: error.message });
       } else {
         res.status(500).json({ error: error.message });
@@ -87,7 +90,7 @@ export class OrderController {
         return;
       }
 
-      const validStatuses = ['pending', 'paid', 'failed', 'cancelled'];
+      const validStatuses = Object.values(OrderStatus);
       if (!validStatuses.includes(status)) {
         res.status(400).json({
           error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`

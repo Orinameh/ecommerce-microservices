@@ -6,7 +6,23 @@ const logger = winston.createLogger({
     winston.format.timestamp(),
     winston.format.colorize(),
     winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
-      return `[${timestamp}] ${level} [${service || "app"}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ""}`;
+      let metaStr = '';
+      if (Object.keys(meta).length) {
+        const safeMeta: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(meta)) {
+          if (val instanceof Error) {
+            safeMeta[key] = { message: val.message, stack: val.stack?.split('\n')[0] };
+          } else {
+            safeMeta[key] = val;
+          }
+        }
+        try {
+          metaStr = JSON.stringify(safeMeta);
+        } catch {
+          metaStr = '[unserializable metadata]';
+        }
+      }
+      return `[${timestamp}] ${level} [${service || "app"}]: ${message} ${metaStr}`;
     }),
   ),
   transports: [

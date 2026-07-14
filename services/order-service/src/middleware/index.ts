@@ -62,6 +62,7 @@ export const idempotencyMiddleware = (req: Request, res: Response, next: any): v
       (req.body as any).idempotencyKey = (req as any).generatedIdempotencyKey;
     } else {
       (req as any).idempotencyKey = idempotencyKey;
+      (req.body as any).idempotencyKey = idempotencyKey;
     }
   }
   next();

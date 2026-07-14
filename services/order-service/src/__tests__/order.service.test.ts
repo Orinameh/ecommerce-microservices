@@ -10,6 +10,7 @@ mock.module('mongoose', () => {
   };
 });
 
+const { OrderStatus, PaymentStatus } = await import('../../../../shared/utils/status');
 const { OrderService } = await import('../services/order.service');
 
 function createMocks() {
@@ -19,10 +20,10 @@ function createMocks() {
     customerId: 'cust_1',
     productId: 'prod_1',
     amount: 100,
-    orderStatus: 'pending',
+    orderStatus: OrderStatus.PENDING,
   };
 
-  const mockPaidOrder = { ...mockOrder, orderStatus: 'paid' };
+  const mockPaidOrder = { ...mockOrder, orderStatus: OrderStatus.PAID };
 
   const repo = {
     findByIdempotencyKey: mock(() => Promise.resolve(null)),
@@ -43,7 +44,7 @@ function createMocks() {
   };
 
   const paymentService = {
-    processPayment: mock(() => Promise.resolve({ status: 'success', transactionId: 'txn_1' })),
+    processPayment: mock(() => Promise.resolve({ status: PaymentStatus.SUCCESS, transactionId: 'txn_1' })),
   };
 
   return { repo, customerService, productService, paymentService, mockOrder, mockPaidOrder };
@@ -65,13 +66,13 @@ describe('OrderService', () => {
       quantity: 1,
     });
 
-    expect(result.paymentStatus).toBe('success');
+    expect(result.paymentStatus).toBe(PaymentStatus.SUCCESS);
     expect(mocks.repo.create).toHaveBeenCalled();
     expect(mocks.productService.reserveStock).toHaveBeenCalledWith('prod_1', 1);
     expect(mocks.paymentService.processPayment).toHaveBeenCalled();
     expect(mocks.repo.updateStatus).toHaveBeenCalledWith(
       mocks.mockOrder._id.toString(),
-      'paid'
+      OrderStatus.PAID
     );
   });
 
@@ -110,7 +111,7 @@ describe('OrderService', () => {
       idempotencyKey: 'ik_test',
     });
 
-    expect(result.order.orderStatus).toBe('paid');
+    expect(result.order.orderStatus).toBe(OrderStatus.PAID);
     expect(mocks.repo.create).not.toHaveBeenCalled();
     expect(mocks.productService.reserveStock).not.toHaveBeenCalled();
   });
@@ -118,7 +119,7 @@ describe('OrderService', () => {
   test('createOrder releases stock on payment failure response', async () => {
     const mocks = createMocks();
     mocks.paymentService.processPayment = mock(() =>
-      Promise.resolve({ status: 'failed', transactionId: 'txn_1' })
+      Promise.resolve({ status: PaymentStatus.FAILED, transactionId: 'txn_1' })
     );
     const service = new OrderService();
     (service as any).repository = mocks.repo;
@@ -132,11 +133,11 @@ describe('OrderService', () => {
       amount: 100,
     });
 
-    expect(result.paymentStatus).toBe('failed');
+    expect(result.paymentStatus).toBe(PaymentStatus.FAILED);
     expect(mocks.productService.releaseStock).toHaveBeenCalledWith('prod_1', 1);
     expect(mocks.repo.updateStatus).toHaveBeenCalledWith(
       mocks.mockOrder._id.toString(),
-      'failed'
+      OrderStatus.FAILED
     );
   });
 
@@ -157,7 +158,7 @@ describe('OrderService', () => {
       amount: 100,
     });
 
-    expect(result.paymentStatus).toBe('failed');
+    expect(result.paymentStatus).toBe(PaymentStatus.FAILED);
     expect(mocks.productService.releaseStock).toHaveBeenCalledWith('prod_1', 1);
   });
 
@@ -201,20 +202,20 @@ describe('OrderService', () => {
     (service as any).productService = mocks.productService;
     (service as any).paymentService = mocks.paymentService;
 
-    await service.updateOrderStatus('507f1f77bcf86cd799439011', 'cancelled');
-    expect(mocks.repo.updateStatus).toHaveBeenCalledWith('507f1f77bcf86cd799439011', 'cancelled');
+    await service.updateOrderStatus('507f1f77bcf86cd799439011', OrderStatus.CANCELLED);
+    expect(mocks.repo.updateStatus).toHaveBeenCalledWith('507f1f77bcf86cd799439011', OrderStatus.CANCELLED);
   });
 
   test('updateOrderStatus rejects invalid transition from paid to pending', async () => {
     const repo = createMocks().repo;
     repo.findById = mock(() =>
-      Promise.resolve({ _id: '507f1f77bcf86cd799439011', orderStatus: 'paid' })
+      Promise.resolve({ _id: '507f1f77bcf86cd799439011', orderStatus: OrderStatus.PAID })
     );
     const service = new OrderService();
     (service as any).repository = repo;
 
     expect(
-      service.updateOrderStatus('507f1f77bcf86cd799439011', 'pending')
+      service.updateOrderStatus('507f1f77bcf86cd799439011', OrderStatus.PENDING)
     ).rejects.toThrow("Cannot transition order from 'paid' to 'pending'");
   });
 

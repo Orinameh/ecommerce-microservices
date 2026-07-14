@@ -75,7 +75,7 @@ describe('idempotencyMiddleware', () => {
 
     idempotencyMiddleware(req, res, next);
 
-    expect(req.body.idempotencyKey).toBeUndefined();
+    expect(req.body.idempotencyKey).toBe('ik_from_header');
     expect((req as any).idempotencyKey).toBe('ik_from_header');
     expect(next).toHaveBeenCalled();
   });

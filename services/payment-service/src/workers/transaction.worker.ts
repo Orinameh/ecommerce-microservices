@@ -1,5 +1,7 @@
 import { Database } from '../../../../shared/utils/database';
 import { HttpClientFactory } from '../../../../shared/utils/httpClient';
+import { OrderStatus } from '../../../../shared/utils/status';
+import { TransactionStatus } from '../../../../shared/utils/status';
 import { config } from '../config/index';
 import logger from '../../../../shared/utils/logger';
 import { TransactionRepository } from '../repositories/transaction.repository';
@@ -40,7 +42,7 @@ class TransactionWorker {
 
         const transaction = await this.repository.updateStatus(
           data.transactionId,
-          'completed'
+          TransactionStatus.COMPLETED
         );
 
         if (transaction) {
@@ -53,7 +55,7 @@ class TransactionWorker {
           try {
             await this.orderClient.put('/api/orders/status', {
               orderId: data.orderId,
-              status: 'paid'
+              status: OrderStatus.PAID
             });
             logger.info(`Worker: Order ${data.orderId} updated to paid`);
           } catch (error: any) {

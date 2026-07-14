@@ -1,11 +1,12 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { OrderStatus } from '../../../../shared/utils/status';
 
 export interface IOrder extends Document {
   idempotencyKey: string;
   customerId: string;
   productId: string;
   amount: number;
-  orderStatus: 'pending' | 'paid' | 'failed' | 'cancelled';
+  orderStatus: OrderStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,8 +32,8 @@ const orderSchema = new Schema<IOrder>({
   },
   orderStatus: {
     type: String,
-    enum: ['pending', 'paid', 'failed', 'cancelled'],
-    default: 'pending'
+    enum: Object.values(OrderStatus),
+    default: OrderStatus.PENDING
   }
 }, {
   timestamps: true,

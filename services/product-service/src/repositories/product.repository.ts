@@ -1,9 +1,11 @@
+import mongoose from 'mongoose';
 import { IProduct, Product } from '../models/product.model';
 import logger from '../../../../shared/utils/logger';
 
 export class ProductRepository {
   async findById(id: string): Promise<IProduct | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Product.findById(id);
     } catch (error) {
       logger.error('Error finding product by ID:', error);
@@ -41,6 +43,7 @@ export class ProductRepository {
 
   async update(id: string, data: Partial<IProduct>): Promise<IProduct | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Product.findByIdAndUpdate(id, data, { new: true });
     } catch (error) {
       logger.error('Error updating product:', error);
@@ -50,6 +53,7 @@ export class ProductRepository {
 
   async updateStock(id: string, quantity: number): Promise<IProduct | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Product.findByIdAndUpdate(
         id,
         { $inc: { stock: -quantity } },
@@ -63,6 +67,7 @@ export class ProductRepository {
 
   async delete(id: string): Promise<boolean> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return false;
       const result = await Product.findByIdAndDelete(id);
       return result !== null;
     } catch (error) {

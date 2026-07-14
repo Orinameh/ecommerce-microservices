@@ -4,6 +4,7 @@ import { IOrder } from '../models/order.model';
 import { CustomerService } from './customer.service';
 import { ProductService } from './product.service';
 import { PaymentService } from './payment.service';
+import { OrderStatus, PaymentStatus } from '../../../../shared/utils/status';
 import logger from '../../../../shared/utils/logger';
 
 export class OrderService {
@@ -25,14 +26,17 @@ export class OrderService {
     amount: number;
     quantity?: number;
     idempotencyKey?: string;
-  }): Promise<{ order: IOrder; paymentStatus: string }> {
+  }): Promise<{ order: IOrder; paymentStatus: PaymentStatus }> {
     const key = data.idempotencyKey || uuidv4();
     const quantity = data.quantity || 1;
 
     const existingOrder = await this.repository.findByIdempotencyKey(key);
     if (existingOrder) {
       logger.info(`Idempotent order request: ${key}`);
-      return { order: existingOrder, paymentStatus: existingOrder.orderStatus };
+      const paymentStatus = existingOrder.orderStatus === OrderStatus.PAID
+        ? PaymentStatus.SUCCESS
+        : PaymentStatus.FAILED;
+      return { order: existingOrder, paymentStatus };
     }
 
     await this.customerService.validateCustomer(data.customerId);
@@ -49,13 +53,16 @@ export class OrderService {
         customerId: data.customerId,
         productId: data.productId,
         amount: data.amount,
-        orderStatus: 'pending'
+        orderStatus: OrderStatus.PENDING
       });
     } catch (error: any) {
       if (error.code === 11000) {
         const existing = await this.repository.findByIdempotencyKey(key);
         if (existing) {
-          return { order: existing, paymentStatus: existing.orderStatus };
+          const paymentStatus = existing.orderStatus === OrderStatus.PAID
+            ? PaymentStatus.SUCCESS
+            : PaymentStatus.FAILED;
+          return { order: existing, paymentStatus };
         }
       }
       throw error;
@@ -63,12 +70,12 @@ export class OrderService {
 
     logger.info(`Order created: ${order._id}`);
 
-    let paymentStatus = 'pending';
+    let paymentStatus: PaymentStatus = PaymentStatus.SUCCESS;
     try {
       await this.productService.reserveStock(data.productId, quantity);
       logger.info(`Stock reserved: ${quantity} units for product ${data.productId}`);
     } catch (error: any) {
-      await this.repository.updateStatus(order._id.toString(), 'failed');
+      await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
       throw new Error(`Stock reservation failed: ${error.message}`);
     }
 
@@ -83,18 +90,18 @@ export class OrderService {
 
       paymentStatus = paymentResult.status;
 
-      if (paymentStatus === 'success') {
-        await this.repository.updateStatus(order._id.toString(), 'paid');
+      if (paymentStatus === PaymentStatus.SUCCESS) {
+        await this.repository.updateStatus(order._id.toString(), OrderStatus.PAID);
         logger.info(`Order ${order._id} paid successfully`);
       } else {
         await this.productService.releaseStock(data.productId, quantity);
-        await this.repository.updateStatus(order._id.toString(), 'failed');
+        await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
         logger.warn(`Order ${order._id} payment failed, stock released`);
       }
     } catch (error: any) {
       await this.productService.releaseStock(data.productId, quantity);
-      await this.repository.updateStatus(order._id.toString(), 'failed');
-      paymentStatus = 'failed';
+      await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
+      paymentStatus = PaymentStatus.FAILED;
       logger.error(`Payment error: ${error.message}`);
     }
 
@@ -114,8 +121,8 @@ export class OrderService {
     return await this.repository.findAll();
   }
 
-  async updateOrderStatus(id: string, status: string): Promise<IOrder> {
-    const validStatuses = ['pending', 'paid', 'failed', 'cancelled'];
+  async updateOrderStatus(id: string, status: OrderStatus): Promise<IOrder> {
+    const validStatuses = [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.FAILED, OrderStatus.CANCELLED];
     if (!validStatuses.includes(status)) {
       throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
@@ -125,11 +132,11 @@ export class OrderService {
       throw new Error('Order not found');
     }
 
-    const allowedTransitions: Record<string, string[]> = {
-      pending: ['paid', 'failed', 'cancelled'],
-      paid: ['cancelled'],
-      failed: [],
-      cancelled: []
+    const allowedTransitions: Record<string, OrderStatus[]> = {
+      [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.FAILED, OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [OrderStatus.CANCELLED],
+      [OrderStatus.FAILED]: [],
+      [OrderStatus.CANCELLED]: []
     };
 
     const allowed = allowedTransitions[order.orderStatus];

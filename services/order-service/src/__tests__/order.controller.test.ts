@@ -10,10 +10,11 @@ mock.module('mongoose', () => {
   };
 });
 
+const { OrderStatus, PaymentStatus } = await import('../../../../shared/utils/status');
 const { OrderController } = await import('../controllers/order.controller');
 
-const mockOrder = { _id: '507f1f77bcf86cd799439011', customerId: 'cust_1', productId: 'prod_1', amount: 100, orderStatus: 'paid' };
-const mockResult = { order: mockOrder, paymentStatus: 'success' };
+const mockOrder = { _id: '507f1f77bcf86cd799439011', customerId: 'cust_1', productId: 'prod_1', amount: 100, orderStatus: OrderStatus.PAID };
+const mockResult = { order: mockOrder, paymentStatus: PaymentStatus.SUCCESS };
 
 function createReqRes() {
   const req: any = { params: {}, body: {}, headers: {}, ip: '127.0.0.1', get: () => {} };
@@ -31,7 +32,7 @@ function createController(overrides: Record<string, any> = {}) {
     createOrder: mock(() => Promise.resolve(mockResult)),
     getOrderById: mock(() => Promise.resolve(mockOrder)),
     getAllOrders: mock(() => Promise.resolve([mockOrder])),
-    updateOrderStatus: mock(() => Promise.resolve({ ...mockOrder, orderStatus: 'cancelled' })),
+    updateOrderStatus: mock(() => Promise.resolve({ ...mockOrder, orderStatus: OrderStatus.CANCELLED })),
     ...overrides,
   };
   return ctrl;
@@ -50,8 +51,8 @@ describe('OrderController', () => {
       customerId: 'cust_1',
       orderId: mockOrder._id,
       productId: 'prod_1',
-      orderStatus: 'paid',
-      paymentStatus: 'success',
+      orderStatus: OrderStatus.PAID,
+      paymentStatus: PaymentStatus.SUCCESS,
     });
   });
 
@@ -108,7 +109,7 @@ describe('OrderController', () => {
   test('updateOrderStatus returns 200 on success', async () => {
     const ctrl = createController();
     const { req, res } = createReqRes();
-    req.body = { orderId: '507f1f77bcf86cd799439011', status: 'cancelled' };
+    req.body = { orderId: '507f1f77bcf86cd799439011', status: OrderStatus.CANCELLED };
 
     await ctrl.updateOrderStatus(req, res);
 

@@ -1,7 +1,9 @@
+import mongoose from 'mongoose';
 import { Transaction, ITransaction } from '../models/transaction.model';
 
 export class TransactionRepository {
   async findById(id: string): Promise<ITransaction | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     return await Transaction.findById(id);
   }
 
@@ -19,10 +21,12 @@ export class TransactionRepository {
   }
 
   async updateStatus(id: string, status: string): Promise<ITransaction | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     return await Transaction.findByIdAndUpdate(id, { status }, { new: true });
   }
 
   async updateProductId(id: string, productId: string): Promise<ITransaction | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     return await Transaction.findByIdAndUpdate(id, { productId }, { new: true });
   }
 }

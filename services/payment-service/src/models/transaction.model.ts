@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { TransactionStatus } from '../../../../shared/utils/status';
 
 export interface ITransaction extends Document {
   idempotencyKey: string;
@@ -6,7 +7,7 @@ export interface ITransaction extends Document {
   orderId: string;
   productId?: string;
   amount: number;
-  status: 'pending' | 'completed' | 'failed';
+  status: TransactionStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,8 +36,8 @@ const transactionSchema = new Schema<ITransaction>({
   },
   status: {
     type: String,
-    enum: ['pending', 'completed', 'failed'],
-    default: 'pending'
+    enum: Object.values(TransactionStatus),
+    default: TransactionStatus.PENDING
   }
 }, {
   timestamps: true,

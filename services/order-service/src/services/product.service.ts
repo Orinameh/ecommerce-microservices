@@ -18,20 +18,41 @@ export class ProductService {
   });
 
   async validateProduct(productId: string): Promise<Product> {
-    return await this.client.get<Product>(`/api/products/${productId}`);
+    try {
+      return await this.client.get<Product>(`/api/products/${productId}`);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`Product not found: ${productId}`);
+      }
+      throw error;
+    }
   }
 
   async reserveStock(productId: string, quantity: number): Promise<Product> {
-    return await this.client.post<Product>(`/api/products/reserve`, {
-      productId,
-      quantity
-    });
+    try {
+      return await this.client.post<Product>(`/api/products/reserve`, {
+        productId,
+        quantity
+      });
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`Product not found: ${productId}`);
+      }
+      throw error;
+    }
   }
 
   async releaseStock(productId: string, quantity: number): Promise<Product> {
-    return await this.client.post<Product>(`/api/products/release`, {
-      productId,
-      quantity
-    });
+    try {
+      return await this.client.post<Product>(`/api/products/release`, {
+        productId,
+        quantity
+      });
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`Product not found: ${productId}`);
+      }
+      throw error;
+    }
   }
 }

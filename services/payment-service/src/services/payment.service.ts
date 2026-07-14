@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { PaymentStatus, TransactionStatus } from '../../../../shared/utils/status';
 import logger from '../../../../shared/utils/logger';
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { RabbitMQService } from './rabbitmq.service';
@@ -18,14 +19,20 @@ export class PaymentService {
     amount: number;
     productId?: string;
     idempotencyKey?: string;
-  }): Promise<{ status: string; transactionId: string }> {
+  }): Promise<{ status: PaymentStatus; transactionId: string }> {
     const key = data.idempotencyKey || uuidv4();
 
     const existing = await this.repository.findByIdempotencyKey(key);
     if (existing) {
+      if (existing.status === TransactionStatus.FAILED) {
+        return {
+          status: PaymentStatus.FAILED,
+          transactionId: existing._id.toString()
+        };
+      }
       logger.info(`Idempotent payment request: ${key}`);
       return {
-        status: existing.status,
+        status: PaymentStatus.SUCCESS,
         transactionId: existing._id.toString()
       };
     }
@@ -35,7 +42,7 @@ export class PaymentService {
       customerId: data.customerId,
       orderId: data.orderId,
       amount: data.amount,
-      status: 'pending'
+      status: TransactionStatus.PENDING
     });
 
     logger.info(`Transaction created: ${transaction._id}`);
@@ -43,7 +50,7 @@ export class PaymentService {
     const paymentSuccess = true;
 
     if (paymentSuccess) {
-      await this.repository.updateStatus(transaction._id.toString(), 'completed');
+      await this.repository.updateStatus(transaction._id.toString(), TransactionStatus.COMPLETED);
 
       if (data.productId) {
         await this.repository.updateProductId(transaction._id.toString(), data.productId);
@@ -61,11 +68,11 @@ export class PaymentService {
       logger.info(`Payment completed for order: ${data.orderId}`);
 
       return {
-        status: 'success',
+        status: PaymentStatus.SUCCESS,
         transactionId: transaction._id.toString()
       };
     } else {
-      await this.repository.updateStatus(transaction._id.toString(), 'failed');
+      await this.repository.updateStatus(transaction._id.toString(), TransactionStatus.FAILED);
       throw new Error('Payment declined');
     }
   }

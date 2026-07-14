@@ -10,6 +10,7 @@ mock.module('mongoose', () => {
   };
 });
 
+const { TransactionStatus } = await import('../../../../shared/utils/status');
 const { PaymentService } = await import('../services/payment.service');
 
 const mockTransaction = {
@@ -18,7 +19,7 @@ const mockTransaction = {
   customerId: 'cust_1',
   orderId: 'ord_1',
   amount: 100,
-  status: 'pending',
+  status: TransactionStatus.PENDING,
 };
 
 function createMocks() {
@@ -27,7 +28,7 @@ function createMocks() {
     findById: mock(() => Promise.resolve(mockTransaction)),
     findAll: mock(() => Promise.resolve([mockTransaction])),
     create: mock(() => Promise.resolve(mockTransaction)),
-    updateStatus: mock(() => Promise.resolve({ ...mockTransaction, status: 'completed' })),
+    updateStatus: mock(() => Promise.resolve({ ...mockTransaction, status: TransactionStatus.COMPLETED })),
     updateProductId: mock(() => Promise.resolve({ ...mockTransaction, productId: 'prod_1' })),
   };
 
@@ -58,7 +59,7 @@ describe('PaymentService', () => {
     expect(mocks.repo.create).toHaveBeenCalled();
     expect(mocks.repo.updateStatus).toHaveBeenCalledWith(
       mockTransaction._id.toString(),
-      'completed'
+      TransactionStatus.COMPLETED
     );
     expect(mocks.repo.updateProductId).toHaveBeenCalledWith(
       mockTransaction._id.toString(),
@@ -77,7 +78,7 @@ describe('PaymentService', () => {
   test('processPayment handles idempotent request', async () => {
     const mocks = createMocks();
     mocks.repo.findByIdempotencyKey = mock(() =>
-      Promise.resolve({ ...mockTransaction, status: 'completed' })
+      Promise.resolve({ ...mockTransaction, status: TransactionStatus.COMPLETED })
     );
     const service = new PaymentService();
     (service as any).repository = mocks.repo;
@@ -90,7 +91,7 @@ describe('PaymentService', () => {
       idempotencyKey: 'ik_test',
     });
 
-    expect(result.status).toBe('completed');
+    expect(result.status).toBe('success');
     expect(mocks.repo.create).not.toHaveBeenCalled();
     expect(mocks.rabbitmq.publishTransaction).not.toHaveBeenCalled();
   });

@@ -1,9 +1,11 @@
+import mongoose from "mongoose";
 import logger from "../../../../shared/utils/logger";
 import { Order, IOrder } from "../models/order.model";
 
 export class OrderRepository {
   async findById(id: string): Promise<IOrder | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Order.findById(id);
     } catch (error) {
       logger.error("Error finding order by ID:", error);
@@ -41,6 +43,7 @@ export class OrderRepository {
 
   async updateStatus(id: string, status: string): Promise<IOrder | null> {
     try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
       return await Order.findByIdAndUpdate(
         id,
         { orderStatus: status },

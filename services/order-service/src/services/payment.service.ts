@@ -9,8 +9,10 @@ export interface PaymentRequest {
   productId: string;
 }
 
+import { PaymentStatus } from '../../../../shared/utils/status';
+
 export interface PaymentResponse {
-  status: string;
+  status: PaymentStatus;
   transactionId: string;
 }
 
