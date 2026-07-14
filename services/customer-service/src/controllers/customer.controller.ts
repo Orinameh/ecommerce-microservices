@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
+import { ApiResponse } from '../../../../shared/utils/response';
+import { catchAsync } from '../../../../shared/utils/middleware';
 import { CustomerService } from '../services/customer.service';
-import logger from '../../../../shared/utils/logger';
 
 interface RouteParams {
   id: string;
 }
+
 export class CustomerController {
   private service: CustomerService;
 
@@ -12,69 +14,28 @@ export class CustomerController {
     this.service = new CustomerService();
   }
 
-  getCustomerById = async (req: Request<RouteParams>, res: Response): Promise<void> => {
-    try {
-      const customer = await this.service.getCustomerById(req.params.id);
-      res.status(200).json(customer);
-    } catch (error: any) {
-      logger.error('Error in getCustomerById:', error);
-      if (error.message === 'Customer not found') {
-        res.status(404).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    }
-  };
+  getCustomerById = catchAsync(async (req: Request<RouteParams>, res: Response) => {
+    const customer = await this.service.getCustomerById(req.params.id);
+    ApiResponse.success(res, customer);
+  });
 
-  getAllCustomers = async (req: Request<RouteParams>, res: Response): Promise<void> => {
-    try {
-      const customers = await this.service.getAllCustomers();
-      res.status(200).json(customers);
-    } catch (error: any) {
-      logger.error('Error in getAllCustomers:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  };
+  getAllCustomers = catchAsync(async (_req: Request<RouteParams>, res: Response) => {
+    const customers = await this.service.getAllCustomers();
+    ApiResponse.success(res, customers);
+  });
 
-  createCustomer = async (req: Request<RouteParams>, res: Response): Promise<void> => {
-    try {
-      const customer = await this.service.createCustomer(req.body);
-      res.status(201).json(customer);
-    } catch (error: any) {
-      logger.error('Error in createCustomer:', error);
-      if (error.message.includes('already exists')) {
-        res.status(409).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    }
-  };
+  createCustomer = catchAsync(async (req: Request<RouteParams>, res: Response) => {
+    const customer = await this.service.createCustomer(req.body);
+    ApiResponse.created(res, customer);
+  });
 
-  updateCustomer = async (req: Request<RouteParams>, res: Response): Promise<void> => {
-    try {
-      const customer = await this.service.updateCustomer(req.params.id, req.body);
-      res.status(200).json(customer);
-    } catch (error: any) {
-      logger.error('Error in updateCustomer:', error);
-      if (error.message === 'Customer not found') {
-        res.status(404).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    }
-  };
+  updateCustomer = catchAsync(async (req: Request<RouteParams>, res: Response) => {
+    const customer = await this.service.updateCustomer(req.params.id, req.body);
+    ApiResponse.success(res, customer);
+  });
 
-  deleteCustomer = async (req: Request<RouteParams>, res: Response): Promise<void> => {
-    try {
-      await this.service.deleteCustomer(req.params.id);
-      res.status(204).send();
-    } catch (error: any) {
-      logger.error('Error in deleteCustomer:', error);
-      if (error.message === 'Customer not found') {
-        res.status(404).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    }
-  };
+  deleteCustomer = catchAsync(async (req: Request<RouteParams>, res: Response) => {
+    await this.service.deleteCustomer(req.params.id);
+    res.status(204).send();
+  });
 }

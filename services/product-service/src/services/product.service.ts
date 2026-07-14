@@ -1,5 +1,6 @@
 import { ProductRepository } from '../repositories/product.repository';
 import { IProduct } from '../models/product.model';
+import { AppError } from '../../../../shared/utils/errors';
 
 export class ProductService {
   private repository: ProductRepository;
@@ -11,7 +12,7 @@ export class ProductService {
   async getProductById(id: string): Promise<IProduct> {
     const product = await this.repository.findById(id);
     if (!product) {
-      throw new Error('Product not found');
+      throw new AppError('Product not found', 404);
     }
     return product;
   }
@@ -31,7 +32,7 @@ export class ProductService {
   async updateProduct(id: string, data: Partial<IProduct>): Promise<IProduct> {
     const product = await this.repository.update(id, data);
     if (!product) {
-      throw new Error('Product not found');
+      throw new AppError('Product not found', 404);
     }
     return product;
   }
@@ -39,7 +40,7 @@ export class ProductService {
   async deleteProduct(id: string): Promise<void> {
     const deleted = await this.repository.delete(id);
     if (!deleted) {
-      throw new Error('Product not found');
+      throw new AppError('Product not found', 404);
     }
   }
 
@@ -50,11 +51,11 @@ export class ProductService {
   async reserveStock(productId: string, quantity: number): Promise<IProduct> {
     const product = await this.repository.updateStock(productId, quantity);
     if (!product) {
-      throw new Error('Product not found');
+      throw new AppError('Product not found', 404);
     }
     if (product.stock < 0) {
       await this.repository.updateStock(productId, -quantity);
-      throw new Error('Insufficient stock');
+      throw new AppError('Insufficient stock', 400);
     }
     return product;
   }
@@ -62,7 +63,7 @@ export class ProductService {
   async releaseStock(productId: string, quantity: number): Promise<IProduct> {
     const product = await this.repository.findById(productId);
     if (!product) {
-      throw new Error('Product not found');
+      throw new AppError('Product not found', 404);
     }
     return await this.repository.updateStock(productId, -quantity) as IProduct;
   }
@@ -70,7 +71,7 @@ export class ProductService {
   async getAvailableStock(productId: string): Promise<number> {
     const product = await this.repository.findById(productId);
     if (!product) {
-      throw new Error('Product not found');
+      throw new AppError('Product not found', 404);
     }
     return product.stock;
   }

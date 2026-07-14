@@ -1,10 +1,19 @@
-import { type Request, type Response, type NextFunction } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import logger from './logger';
+import { AppError } from './errors';
+
+export function catchAsync<P = any, ResBody = any, ReqBody = any, ReqQuery = any, Locals extends Record<string, any> = Record<string, any>>(
+  fn: (req: Request<P, ResBody, ReqBody, ReqQuery, Locals>, res: Response<ResBody, Locals>, next: NextFunction) => Promise<void>,
+): RequestHandler<P, ResBody, ReqBody, ReqQuery, Locals> {
+  return (req, res, next) => {
+    return fn(req, res, next).catch(next);
+  };
+}
 
 type ServiceErrorHandler = (err: any, req: Request, res: Response) => boolean;
 
@@ -139,11 +148,12 @@ export function createErrorHandler(serviceHandlers: ServiceErrorHandler[] = []) 
       if (handler(err, req, res)) return;
     }
 
+    const statusCode = err instanceof AppError ? err.statusCode : err.status || 500;
     const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
-    res.status(err.status || 500).json({
-      error: isProduction ? 'Internal server error' : err.message,
+    res.status(statusCode).json({
+      error: isProduction && statusCode === 500 ? 'Internal server error' : err.message,
       requestId,
-      ...(isProduction ? {} : { stack: err.stack }),
+      ...(isProduction && statusCode === 500 ? {} : { stack: err.stack }),
       timestamp: new Date().toISOString(),
     });
   };

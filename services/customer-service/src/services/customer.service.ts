@@ -1,3 +1,4 @@
+import { AppError } from '../../../../shared/utils/errors';
 import { CustomerRepository } from '../repositories/customer.repository';
 import { ICustomer } from '../models/customer.model';
 
@@ -11,7 +12,7 @@ export class CustomerService {
   async getCustomerById(id: string): Promise<ICustomer> {
     const customer = await this.repository.findById(id);
     if (!customer) {
-      throw new Error('Customer not found');
+      throw new AppError('Customer not found', 404);
     }
     return customer;
   }
@@ -23,7 +24,7 @@ export class CustomerService {
   async createCustomer(data: Partial<ICustomer>): Promise<ICustomer> {
     const existing = await this.repository.findByEmail(data.email!);
     if (existing) {
-      throw new Error('Customer with this email already exists');
+      throw new AppError('Customer with this email already exists', 409);
     }
     return await this.repository.create(data);
   }
@@ -31,7 +32,7 @@ export class CustomerService {
   async updateCustomer(id: string, data: Partial<ICustomer>): Promise<ICustomer> {
     const customer = await this.repository.update(id, data);
     if (!customer) {
-      throw new Error('Customer not found');
+      throw new AppError('Customer not found', 404);
     }
     return customer;
   }
@@ -39,7 +40,7 @@ export class CustomerService {
   async deleteCustomer(id: string): Promise<void> {
     const deleted = await this.repository.delete(id);
     if (!deleted) {
-      throw new Error('Customer not found');
+      throw new AppError('Customer not found', 404);
     }
   }
 

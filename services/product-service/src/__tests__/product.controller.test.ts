@@ -10,18 +10,20 @@ mock.module('mongoose', () => {
   };
 });
 
+const { AppError } = await import('../../../../shared/utils/errors');
 const { ProductController } = await import('../controllers/product.controller');
 
 const mockProduct = { _id: '507f1f77bcf86cd799439011', name: 'MacBook', price: 2499, stock: 10 };
 
 function createReqRes() {
   const req: any = { params: {}, body: {}, headers: {}, ip: '127.0.0.1', get: () => {} };
+  const next: any = mock(() => {});
   const res: any = {
     status: mock(() => res),
     json: mock(() => res),
     send: mock(() => res),
   };
-  return { req, res };
+  return { req, res, next };
 }
 
 function createController(overrides: Record<string, any> = {}) {
@@ -52,13 +54,13 @@ describe('ProductController', () => {
   });
 
   test('getProductById returns 404 when not found', async () => {
-    const ctrl = createController({ getProductById: mock(() => Promise.reject(new Error('Product not found'))) });
-    const { req, res } = createReqRes();
+    const ctrl = createController({ getProductById: mock(() => Promise.reject(new AppError('Product not found', 404))) });
+    const { req, res, next } = createReqRes();
     req.params = { id: 'nonexistent' };
 
-    await ctrl.getProductById(req, res);
+    await ctrl.getProductById(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(404);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Product not found', statusCode: 404 }));
   });
 
   test('createProduct returns 201', async () => {
@@ -93,13 +95,13 @@ describe('ProductController', () => {
   });
 
   test('reserveStock returns 409 on insufficient stock', async () => {
-    const ctrl = createController({ reserveStock: mock(() => Promise.reject(new Error('Insufficient stock'))) });
-    const { req, res } = createReqRes();
+    const ctrl = createController({ reserveStock: mock(() => Promise.reject(new AppError('Insufficient stock', 400))) });
+    const { req, res, next } = createReqRes();
     req.body = { productId: 'pid', quantity: 99 };
 
-    await ctrl.reserveStock(req, res);
+    await ctrl.reserveStock(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(409);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Insufficient stock', statusCode: 400 }));
   });
 
   test('releaseStock returns 200', async () => {

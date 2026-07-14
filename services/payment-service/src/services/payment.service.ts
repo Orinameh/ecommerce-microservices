@@ -3,6 +3,7 @@ import { PaymentStatus, TransactionStatus } from '../../../../shared/utils/statu
 import logger from '../../../../shared/utils/logger';
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { RabbitMQService } from './rabbitmq.service';
+import { AppError } from '../../../../shared/utils/errors';
 
 export class PaymentService {
   private repository: TransactionRepository;
@@ -73,14 +74,14 @@ export class PaymentService {
       };
     } else {
       await this.repository.updateStatus(transaction._id.toString(), TransactionStatus.FAILED);
-      throw new Error('Payment declined');
+      throw new AppError('Payment declined', 400);
     }
   }
 
   async getTransactionById(id: string): Promise<any> {
     const transaction = await this.repository.findById(id);
     if (!transaction) {
-      throw new Error('Transaction not found');
+      throw new AppError('Transaction not found', 404);
     }
     return transaction;
   }

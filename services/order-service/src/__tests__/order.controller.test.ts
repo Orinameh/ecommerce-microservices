@@ -10,6 +10,7 @@ mock.module('mongoose', () => {
   };
 });
 
+const { AppError } = await import('../../../../shared/utils/errors');
 const { OrderStatus, PaymentStatus } = await import('../../../../shared/utils/status');
 const { OrderController } = await import('../controllers/order.controller');
 
@@ -18,12 +19,13 @@ const mockResult = { order: mockOrder, paymentStatus: PaymentStatus.SUCCESS };
 
 function createReqRes() {
   const req: any = { params: {}, body: {}, headers: {}, ip: '127.0.0.1', get: () => {} };
+  const next: any = mock(() => {});
   const res: any = {
     status: mock(() => res),
     json: mock(() => res),
     send: mock(() => res),
   };
-  return { req, res };
+  return { req, res, next };
 }
 
 function createController(overrides: Record<string, any> = {}) {
@@ -67,23 +69,23 @@ describe('OrderController', () => {
   });
 
   test('createOrder returns 409 on stock reservation failure', async () => {
-    const ctrl = createController({ createOrder: mock(() => Promise.reject(new Error('Stock reservation failed: Out of stock'))) });
-    const { req, res } = createReqRes();
+    const ctrl = createController({ createOrder: mock(() => Promise.reject(new AppError('Stock reservation failed: Out of stock', 409))) });
+    const { req, res, next } = createReqRes();
     req.body = { customerId: 'cust_1', productId: 'prod_1', amount: 100 };
 
-    await ctrl.createOrder(req, res);
+    await ctrl.createOrder(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(409);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Stock reservation failed: Out of stock', statusCode: 409 }));
   });
 
   test('createOrder returns 500 on generic error', async () => {
     const ctrl = createController({ createOrder: mock(() => Promise.reject(new Error('Insufficient stock'))) });
-    const { req, res } = createReqRes();
+    const { req, res, next } = createReqRes();
     req.body = { customerId: 'cust_1', productId: 'prod_1', amount: 100 };
 
-    await ctrl.createOrder(req, res);
+    await ctrl.createOrder(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(500);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Insufficient stock' }));
   });
 
   test('getOrderById returns 200 with order', async () => {
@@ -97,13 +99,13 @@ describe('OrderController', () => {
   });
 
   test('getOrderById returns 404 when not found', async () => {
-    const ctrl = createController({ getOrderById: mock(() => Promise.reject(new Error('Order not found'))) });
-    const { req, res } = createReqRes();
+    const ctrl = createController({ getOrderById: mock(() => Promise.reject(new AppError('Order not found', 404))) });
+    const { req, res, next } = createReqRes();
     req.params = { id: 'nonexistent' };
 
-    await ctrl.getOrderById(req, res);
+    await ctrl.getOrderById(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(404);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Order not found', statusCode: 404 }));
   });
 
   test('updateOrderStatus returns 200 on success', async () => {

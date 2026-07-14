@@ -5,6 +5,7 @@ import { CustomerService } from './customer.service';
 import { ProductService } from './product.service';
 import { PaymentService } from './payment.service';
 import { OrderStatus, PaymentStatus } from '../../../../shared/utils/status';
+import { AppError } from '../../../../shared/utils/errors';
 import logger from '../../../../shared/utils/logger';
 
 export class OrderService {
@@ -43,7 +44,7 @@ export class OrderService {
 
     const product = await this.productService.validateProduct(data.productId);
     if (product.stock < quantity) {
-      throw new Error('Insufficient stock');
+      throw new AppError('Insufficient stock', 400);
     }
 
     let order: IOrder;
@@ -76,7 +77,7 @@ export class OrderService {
       logger.info(`Stock reserved: ${quantity} units for product ${data.productId}`);
     } catch (error: any) {
       await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
-      throw new Error(`Stock reservation failed: ${error.message}`);
+      throw new AppError(`Stock reservation failed: ${error.message}`, 409);
     }
 
     try {
@@ -112,7 +113,7 @@ export class OrderService {
   async getOrderById(id: string): Promise<IOrder> {
     const order = await this.repository.findById(id);
     if (!order) {
-      throw new Error('Order not found');
+      throw new AppError('Order not found', 404);
     }
     return order;
   }
@@ -124,12 +125,12 @@ export class OrderService {
   async updateOrderStatus(id: string, status: OrderStatus): Promise<IOrder> {
     const validStatuses = [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.FAILED, OrderStatus.CANCELLED];
     if (!validStatuses.includes(status)) {
-      throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      throw new AppError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400);
     }
 
     const order = await this.repository.findById(id);
     if (!order) {
-      throw new Error('Order not found');
+      throw new AppError('Order not found', 404);
     }
 
     const allowedTransitions: Record<string, OrderStatus[]> = {
@@ -141,14 +142,14 @@ export class OrderService {
 
     const allowed = allowedTransitions[order.orderStatus];
     if (!allowed || !allowed.includes(status)) {
-      throw new Error(
-        `Cannot transition order from '${order.orderStatus}' to '${status}'`
+      throw new AppError(
+        `Cannot transition order from '${order.orderStatus}' to '${status}'`, 400
       );
     }
 
     const updated = await this.repository.updateStatus(id, status);
     if (!updated) {
-      throw new Error('Order not found');
+      throw new AppError('Order not found', 404);
     }
 
     logger.info(`Order ${id} status updated to ${status}`);

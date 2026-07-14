@@ -1,3 +1,4 @@
+import { AppError } from '../../../../shared/utils/errors';
 import { HttpClientFactory } from '../../../../shared/utils/httpClient';
 import { config } from '../config';
 
@@ -22,7 +23,7 @@ export class CustomerService {
       return await this.client.get<Customer>(`/api/customers/${customerId}`);
     } catch (error: any) {
       if (error.response?.status === 404) {
-        throw new Error(`Customer not found: ${customerId}`);
+        throw new AppError(`Customer not found: ${customerId}`, 404);
       }
       throw error;
     }

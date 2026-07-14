@@ -10,19 +10,21 @@ mock.module('mongoose', () => {
   };
 });
 
+const { AppError } = await import('../../../../shared/utils/errors');
 const { TransactionStatus } = await import('../../../../shared/utils/status');
 const { PaymentController } = await import('../controllers/payment.controller');
 
 const mockResult = { status: 'success', transactionId: 'txn_1' };
 
 function createReqRes() {
-  const req: any = { params: {}, body: {}, headers: {}, ip: '127.0.0.1', get: () => {} };
+  const req: any = { params: {}, body: {}, headers: {}, ip: '127.0.0.1', get: () => {}, header: () => {} };
+  const next: any = mock(() => {});
   const res: any = {
     status: mock(() => res),
     json: mock(() => res),
     send: mock(() => res),
   };
-  return { req, res };
+  return { req, res, next };
 }
 
 function createController(overrides: Record<string, any> = {}) {
@@ -74,13 +76,13 @@ describe('PaymentController', () => {
   });
 
   test('getTransactionById returns 404 when not found', async () => {
-    const ctrl = createController({ getTransactionById: mock(() => Promise.reject(new Error('Transaction not found'))) });
-    const { req, res } = createReqRes();
+    const ctrl = createController({ getTransactionById: mock(() => Promise.reject(new AppError('Transaction not found', 404))) });
+    const { req, res, next } = createReqRes();
     req.params = { id: 'nonexistent' };
 
-    await ctrl.getTransactionById(req, res);
+    await ctrl.getTransactionById(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(404);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Transaction not found', statusCode: 404 }));
   });
 
   test('getAllTransactions returns 200', async () => {

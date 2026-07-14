@@ -114,3 +114,12 @@ cd services/<service-name> && bun build src/index.ts --outdir ./dist --target no
 - [Product Service](./services/product-service/README.md)
 - [Order Service](./services/order-service/README.md)
 - [Payment Service](./services/payment-service/README.md)
+
+
+
+### Additional
+
+For a more robust microservices in production, we add
+- An api gateway
+- Manage the containers with kubernetes
+- Automate deployment with ci/cd using github workflows and argocd

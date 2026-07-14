@@ -1,3 +1,4 @@
+import { AppError } from '../../../../shared/utils/errors';
 import { HttpClientFactory } from '../../../../shared/utils/httpClient';
 import { config } from '../config/index';
 
@@ -22,7 +23,7 @@ export class ProductService {
       return await this.client.get<Product>(`/api/products/${productId}`);
     } catch (error: any) {
       if (error.response?.status === 404) {
-        throw new Error(`Product not found: ${productId}`);
+        throw new AppError(`Product not found: ${productId}`, 404);
       }
       throw error;
     }
@@ -36,7 +37,7 @@ export class ProductService {
       });
     } catch (error: any) {
       if (error.response?.status === 404) {
-        throw new Error(`Product not found: ${productId}`);
+        throw new AppError(`Product not found: ${productId}`, 404);
       }
       throw error;
     }
@@ -50,7 +51,7 @@ export class ProductService {
       });
     } catch (error: any) {
       if (error.response?.status === 404) {
-        throw new Error(`Product not found: ${productId}`);
+        throw new AppError(`Product not found: ${productId}`, 404);
       }
       throw error;
     }
