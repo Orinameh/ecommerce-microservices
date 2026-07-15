@@ -79,9 +79,7 @@ A microservices-based e-commerce platform with RESTful synchronous communication
 7. **Transaction worker** consumes the message, persists to transaction history
 8. **Order service** returns response with `customerId`, `orderId`, `productId`, `orderStatus`, `paymentStatus`
 
-> **Note:** In this implementation, the simulated payment always succeeds, so the
-> order status goes directly to `paid`. In production with a real payment gateway,
-> the order would start as `pending` and update after payment confirmation.
+> **Note:** The simulated payment always succeeds, so the order transitions from `pending` → `paid` almost immediately. In production with a real payment gateway, the `pending` window would persist until the payment provider confirms.
 
 ## Running Locally
 
