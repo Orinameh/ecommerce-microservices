@@ -79,16 +79,37 @@ export class CircuitBreaker {
       if (this.halfOpenSuccesses >= this.options.successThreshold) {
         this.state = CircuitState.CLOSED;
         this.stats.failures = 0;
+        this.updateFailureRate();
         logger.info(`✅ Circuit CLOSED for ${this.options.serviceName} - service recovered`);
       }
     } else if (this.state === CircuitState.CLOSED) {
-      // Reduce failure count on success
-      this.stats.failures = Math.max(0, this.stats.failures - 1);
+      // Reset failures on success in CLOSED — sliding window would be better, but at least reset
+      // Previously decremented by 1 which leaves stale count after 4 failures; now reset to 0
+      this.stats.failures = 0;
       this.updateFailureRate();
     }
   }
 
+  private isBusinessError(error: any): boolean {
+    // 4xx (except 408,429,503) are business errors — don't trip circuit
+    const status = error?.response?.status;
+    if (typeof status === 'number' && status >= 400 && status < 500) {
+      // 408 timeout, 429 too many, 503 unavailable are retryable — count them
+      if (status === 408 || status === 429 || status === 503) return false;
+      return true;
+    }
+    // AppError 400/404 from services
+    if (error?.statusCode && error.statusCode >= 400 && error.statusCode < 500) return true;
+    if (error?.status && error.status >= 400 && error.status < 500) return true;
+    return false;
+  }
+
   private handleFailure(error: any): void {
+    // Don't count business 4xx as circuit failures
+    if (this.isBusinessError(error)) {
+      logger.debug(`CircuitBreaker ignoring business error for ${this.options.serviceName}: ${error.message}`);
+      return;
+    }
     this.stats.failures++;
     this.stats.lastFailureTime = new Date();
     this.updateFailureRate();
@@ -128,18 +149,28 @@ export class CircuitBreaker {
   }
 }
 
-// Circuit Breaker Factory
+// Circuit Breaker Factory — thresholds configurable per service via second arg or env
 export class CircuitBreakerFactory {
   private static circuits: Map<string, CircuitBreaker> = new Map();
 
-  static getOrCreate(serviceName: string): CircuitBreaker {
+  static getOrCreate(serviceName: string, overrides?: Partial<CircuitBreakerOptions>): CircuitBreaker {
     if (!this.circuits.has(serviceName)) {
+      // Per-service tuning: payment is critical (lower threshold), product can be higher
+      const defaults: Record<string, Partial<CircuitBreakerOptions>> = {
+        'payment-service': { failureThreshold: 3, halfOpenTimeout: 30000 },
+        'product-service': { failureThreshold: 5, halfOpenTimeout: 20000 },
+        'customer-service': { failureThreshold: 5, halfOpenTimeout: 20000 },
+        'order-service': { failureThreshold: 5, halfOpenTimeout: 20000 },
+      };
+      const perService = defaults[serviceName] || {};
       const circuit = new CircuitBreaker({
         serviceName,
         failureThreshold: 5,
         successThreshold: 3,
         timeout: 10000,
-        halfOpenTimeout: 30000
+        halfOpenTimeout: 30000,
+        ...perService,
+        ...overrides,
       });
       this.circuits.set(serviceName, circuit);
     }
@@ -160,7 +191,7 @@ export class CircuitBreakerFactory {
   }
 }
 
-export const withCircuitBreaker = (serviceName: string, fn: () => Promise<any>) => {
-  const circuit = CircuitBreakerFactory.getOrCreate(serviceName);
+export const withCircuitBreaker = (serviceName: string, fn: () => Promise<any>, overrides?: Partial<CircuitBreakerOptions>) => {
+  const circuit = CircuitBreakerFactory.getOrCreate(serviceName, overrides);
   return circuit.execute(fn);
 };

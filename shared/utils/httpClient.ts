@@ -9,6 +9,7 @@ export interface HttpClientConfig {
   maxRetries?: number;
   retryDelay?: number;
   serviceName: string;
+  circuitBreaker?: { failureThreshold?: number; successThreshold?: number; halfOpenTimeout?: number };
 }
 
 export class HttpClient {
@@ -16,11 +17,13 @@ export class HttpClient {
   private serviceName: string;
   private maxRetries: number;
   private retryDelay: number;
+  private circuitOverrides?: { failureThreshold?: number; successThreshold?: number; halfOpenTimeout?: number };
 
   constructor(config: HttpClientConfig) {
     this.serviceName = config.serviceName;
     this.maxRetries = config.maxRetries || 3;
     this.retryDelay = config.retryDelay || 500;
+    this.circuitOverrides = config.circuitBreaker;
 
     this.client = axios.create({
       baseURL: config.baseURL,
@@ -76,7 +79,7 @@ export class HttpClient {
           },
           `${this.serviceName} GET ${url}`
         );
-      });
+      }, this.circuitOverrides);
       return result;
     } catch (error) {
       this.handleError(error, 'GET', url);
@@ -106,7 +109,7 @@ export class HttpClient {
           },
           `${this.serviceName} POST ${url}`
         );
-      });
+      }, this.circuitOverrides);
       return result;
     } catch (error) {
       this.handleError(error, 'POST', url);
@@ -130,7 +133,7 @@ export class HttpClient {
           },
           `${this.serviceName} PUT ${url}`
         );
-      });
+      }, this.circuitOverrides);
       return result;
     } catch (error) {
       this.handleError(error, 'PUT', url);
@@ -154,7 +157,7 @@ export class HttpClient {
           },
           `${this.serviceName} DELETE ${url}`
         );
-      });
+      }, this.circuitOverrides);
       return result;
     } catch (error) {
       this.handleError(error, 'DELETE', url);
@@ -178,7 +181,7 @@ export class HttpClient {
           },
           `${this.serviceName} ${config.method?.toUpperCase()} ${config.url}`
         );
-      });
+      }, this.circuitOverrides);
       return result;
     } catch (error) {
       this.handleError(error, config.method?.toUpperCase() || 'REQUEST', config.url || 'unknown');

@@ -162,6 +162,10 @@ export class OrderService {
         productId: data.productId
       });
 
+      // This is demo correct but production incomplete - SUCCESS is submitted, 
+      // not confirmed — worker consumes `transaction_queue` and 
+      // `PUT /orders/status → PAID`; keep PENDING until then. 
+      // Only FAILED is definite → compensate (release stock + FAILED).
       if (paymentResult.status === PaymentStatus.SUCCESS) {
         logger.info(`Order ${orderId} payment submitted, worker will confirm`);
       } else {
