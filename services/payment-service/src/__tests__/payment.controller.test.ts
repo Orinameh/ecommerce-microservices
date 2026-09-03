@@ -42,7 +42,8 @@ describe('PaymentController', () => {
   test('processPayment returns 200 with payment result', async () => {
     const ctrl = createController();
     const { req, res } = createReqRes();
-    req.body = { customerId: 'cust_1', orderId: 'ord_1', amount: 100, productId: 'prod_1' };
+    req.body = { customerId: 'cust_1', orderId: 'ord_1', amount: 100, productId: 'prod_1', idempotencyKey: 'ik_test_payment_123' };
+    (req as any).idempotencyKey = 'ik_test_payment_123';
 
     await ctrl.processPayment(req, res);
 
@@ -55,14 +56,16 @@ describe('PaymentController', () => {
     });
   });
 
-  test('processPayment returns 400 when required fields missing', async () => {
-    const ctrl = createController();
-    const { req, res } = createReqRes();
+  test('processPayment forwards validation error when required fields missing', async () => {
+    const ctrl = createController({
+      processPayment: mock(() => Promise.reject(new Error('Idempotency key is required'))),
+    });
+    const { req, res, next } = createReqRes();
     req.body = {};
 
-    await ctrl.processPayment(req, res);
+    await ctrl.processPayment(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(next).toHaveBeenCalled();
   });
 
   test('getTransactionById returns 200', async () => {

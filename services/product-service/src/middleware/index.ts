@@ -8,6 +8,7 @@ import {
   createErrorHandler,
   notFoundHandler,
   createTimeoutMiddleware,
+  requestIdMiddleware,
 } from '../../../../shared/utils/middleware';
 
 const allowedHeaders = ['Content-Type', 'Authorization', 'X-Request-Id'];
@@ -52,20 +53,29 @@ export const errorHandler = createErrorHandler([
   },
 ]);
 
-export { notFoundHandler };
+export { notFoundHandler, requestIdMiddleware };
 
 export const timeoutMiddleware = (timeout?: number) => createTimeoutMiddleware(timeout ?? config.timeout);
 
 export const validateStockOperation = (req: Request, res: Response, next: any): void => {
   const { productId, quantity } = req.body;
+  const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 
   if (!productId) {
     res.status(400).json({ error: 'Missing productId', timestamp: new Date().toISOString() });
     return;
   }
+  if (typeof productId !== 'string' || !objectIdRegex.test(productId)) {
+    res.status(400).json({ error: 'Invalid productId format', timestamp: new Date().toISOString() });
+    return;
+  }
 
-  if (!quantity || quantity <= 0) {
-    res.status(400).json({ error: 'Quantity must be greater than 0', timestamp: new Date().toISOString() });
+  if (quantity === undefined || quantity === null) {
+    res.status(400).json({ error: 'Missing quantity', timestamp: new Date().toISOString() });
+    return;
+  }
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    res.status(400).json({ error: 'Quantity must be a positive integer', timestamp: new Date().toISOString() });
     return;
   }
 

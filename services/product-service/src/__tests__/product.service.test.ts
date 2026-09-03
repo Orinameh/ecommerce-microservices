@@ -28,6 +28,8 @@ function createMockRepository() {
     create: mock(() => Promise.resolve(mockProduct)),
     update: mock(() => Promise.resolve(mockProduct)),
     updateStock: mock(() => Promise.resolve({ ...mockProduct, stock: 8 })),
+    reserveStockAtomic: mock(() => Promise.resolve({ ...mockProduct, stock: 8 })),
+    releaseStockAtomic: mock(() => Promise.resolve({ ...mockProduct, stock: 12 })),
     delete: mock(() => Promise.resolve(true)),
     seedDefaultProducts: mock(() => Promise.resolve()),
   };
@@ -65,19 +67,18 @@ describe('ProductService', () => {
 
   test('reserveStock decrements stock atomically', async () => {
     const repo = createMockRepository();
-    repo.updateStock = mock(() => Promise.resolve({ ...mockProduct, stock: 8 }));
     const service = new ProductService();
     (service as any).repository = repo;
 
     const result = await service.reserveStock('507f1f77bcf86cd799439011', 2);
 
     expect(result.stock).toBe(8);
-    expect(repo.updateStock).toHaveBeenCalledWith('507f1f77bcf86cd799439011', 2);
+    expect(repo.reserveStockAtomic).toHaveBeenCalledWith('507f1f77bcf86cd799439011', 2);
   });
 
   test('reserveStock throws on insufficient stock', async () => {
     const repo = createMockRepository();
-    repo.updateStock = mock(() => Promise.resolve({ ...mockProduct, stock: -2 }));
+    repo.reserveStockAtomic = mock(() => Promise.resolve(null));
     const service = new ProductService();
     (service as any).repository = repo;
 
@@ -86,7 +87,8 @@ describe('ProductService', () => {
 
   test('reserveStock throws when product not found', async () => {
     const repo = createMockRepository();
-    repo.updateStock = mock(() => Promise.resolve(null));
+    repo.reserveStockAtomic = mock(() => Promise.resolve(null));
+    repo.findById = mock(() => Promise.resolve(null));
     const service = new ProductService();
     (service as any).repository = repo;
 
@@ -95,14 +97,13 @@ describe('ProductService', () => {
 
   test('releaseStock increments stock', async () => {
     const repo = createMockRepository();
-    repo.updateStock = mock(() => Promise.resolve({ ...mockProduct, stock: 12 }));
     const service = new ProductService();
     (service as any).repository = repo;
 
     const result = await service.releaseStock('507f1f77bcf86cd799439011', 2);
 
     expect(result.stock).toBe(12);
-    expect(repo.updateStock).toHaveBeenCalledWith('507f1f77bcf86cd799439011', -2);
+    expect(repo.releaseStockAtomic).toHaveBeenCalledWith('507f1f77bcf86cd799439011', 2);
   });
 
   test('getAvailableStock returns stock count', async () => {

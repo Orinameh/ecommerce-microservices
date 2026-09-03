@@ -65,6 +65,36 @@ export class ProductRepository {
     }
   }
 
+  async reserveStockAtomic(id: string, quantity: number): Promise<IProduct | null> {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
+      if (quantity <= 0) throw new Error('Quantity must be > 0');
+      return await Product.findOneAndUpdate(
+        { _id: id, stock: { $gte: quantity } },
+        { $inc: { stock: -quantity } },
+        { new: true }
+      );
+    } catch (error) {
+      logger.error('Error reserving stock atomically:', error);
+      throw error;
+    }
+  }
+
+  async releaseStockAtomic(id: string, quantity: number): Promise<IProduct | null> {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id)) return null;
+      if (quantity <= 0) throw new Error('Quantity must be > 0');
+      return await Product.findByIdAndUpdate(
+        id,
+        { $inc: { stock: quantity } },
+        { new: true }
+      );
+    } catch (error) {
+      logger.error('Error releasing stock:', error);
+      throw error;
+    }
+  }
+
   async delete(id: string): Promise<boolean> {
     try {
       if (!mongoose.Types.ObjectId.isValid(id)) return false;

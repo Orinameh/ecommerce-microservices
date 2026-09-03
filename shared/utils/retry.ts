@@ -33,11 +33,16 @@ export class RetryHandler {
       } catch (error: any) {
         lastError = error;
 
-        const isRetryable = opts.retryableErrors.some(err => 
-          error.message?.includes(err) || 
-          error.code?.includes(err) ||
-          error.response?.status?.toString() === err
-        );
+        const isRetryable = (() => {
+          // Retry on 5xx HTTP status
+          const status = error.response?.status;
+          if (typeof status === 'number' && status >= 500 && status < 600) return true;
+          return opts.retryableErrors.some(err => 
+            error.message?.includes(err) || 
+            error.code?.includes(err) ||
+            error.response?.status?.toString() === err
+          );
+        })();
 
         if (!isRetryable || attempt === opts.maxRetries) {
           logger.error(`${context} failed after ${attempt} attempts:`, error.message);

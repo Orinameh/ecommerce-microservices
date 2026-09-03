@@ -16,19 +16,16 @@ export class PaymentController {
   }
 
   processPayment = catchAsync(async (req: Request, res: Response) => {
+    // Validation via idempotencyMiddleware + validatePaymentRequest — no duplicate checks
     const { customerId, orderId, amount, productId, idempotencyKey } = req.body;
-
-    if (!customerId || !orderId || !amount) {
-      ApiResponse.badRequest(res, 'Missing required fields: customerId, orderId, amount');
-      return;
-    }
+    const key = (req as any).idempotencyKey || idempotencyKey;
 
     const result = await this.service.processPayment({
       customerId,
       orderId,
       amount,
       productId,
-      idempotencyKey
+      idempotencyKey: key
     });
 
     ApiResponse.success(res, {

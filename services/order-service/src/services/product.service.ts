@@ -29,12 +29,13 @@ export class ProductService {
     }
   }
 
-  async reserveStock(productId: string, quantity: number): Promise<Product> {
+  async reserveStock(productId: string, quantity: number, idempotencyKey?: string): Promise<Product> {
     try {
       return await this.client.post<Product>(`/api/products/reserve`, {
         productId,
-        quantity
-      });
+        quantity,
+        idempotencyKey
+      }, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } as any : undefined);
     } catch (error: any) {
       if (error.response?.status === 404) {
         throw new AppError(`Product not found: ${productId}`, 404);
@@ -43,12 +44,13 @@ export class ProductService {
     }
   }
 
-  async releaseStock(productId: string, quantity: number): Promise<Product> {
+  async releaseStock(productId: string, quantity: number, idempotencyKey?: string): Promise<Product> {
     try {
       return await this.client.post<Product>(`/api/products/release`, {
         productId,
-        quantity
-      });
+        quantity,
+        idempotencyKey
+      }, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } as any : undefined);
     } catch (error: any) {
       if (error.response?.status === 404) {
         throw new AppError(`Product not found: ${productId}`, 404);

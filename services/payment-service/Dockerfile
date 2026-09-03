@@ -2,11 +2,11 @@ FROM oven/bun:latest AS builder
 
 WORKDIR /app
 
-COPY services/payment-service/package.json services/payment-service/bun.lockb* ./services/payment-service/
-COPY shared/package.json shared/bun.lockb* ./shared/
+COPY services/payment-service/package.json services/payment-service/bun.lock* ./services/payment-service/
+COPY shared/package.json shared/bun.lock* ./shared/
 
-RUN cd services/payment-service && bun install --frozen-lockfile
-RUN cd shared && bun install --frozen-lockfile
+RUN cd services/payment-service && bun install --frozen-lockfile || bun install
+RUN cd shared && bun install --frozen-lockfile || bun install
 
 COPY shared/ ./shared/
 COPY services/payment-service/ ./services/payment-service/
@@ -15,6 +15,8 @@ RUN cd services/payment-service && bun build src/index.ts --outdir ./dist --targ
 RUN cd services/payment-service && bun build src/workers/transaction.worker.ts --outdir ./dist/workers --target node --external mongoose
 
 FROM node:26-alpine AS runner
+
+RUN apk add --no-cache wget
 
 WORKDIR /app
 

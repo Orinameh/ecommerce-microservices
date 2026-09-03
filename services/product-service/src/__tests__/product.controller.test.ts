@@ -84,14 +84,16 @@ describe('ProductController', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true, product: { ...mockProduct, stock: 8 } });
   });
 
-  test('reserveStock returns 400 when fields missing', async () => {
-    const ctrl = createController();
-    const { req, res } = createReqRes();
+  test('reserveStock forwards error when fields missing (handled by middleware)', async () => {
+    const ctrl = createController({
+      reserveStock: mock(() => Promise.reject(new AppError('Missing productId', 400))),
+    });
+    const { req, res, next } = createReqRes();
     req.body = {};
 
-    await ctrl.reserveStock(req, res);
+    await ctrl.reserveStock(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(next).toHaveBeenCalled();
   });
 
   test('reserveStock returns 409 on insufficient stock', async () => {
@@ -114,13 +116,15 @@ describe('ProductController', () => {
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
-  test('releaseStock returns 400 when fields missing', async () => {
-    const ctrl = createController();
-    const { req, res } = createReqRes();
+  test('releaseStock forwards error when fields missing (handled by middleware)', async () => {
+    const ctrl = createController({
+      releaseStock: mock(() => Promise.reject(new AppError('Missing productId', 400))),
+    });
+    const { req, res, next } = createReqRes();
     req.body = {};
 
-    await ctrl.releaseStock(req, res);
+    await ctrl.releaseStock(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(next).toHaveBeenCalled();
   });
 });

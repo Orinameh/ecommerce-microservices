@@ -9,8 +9,9 @@ interface Params {
   id: string
 }
 
+// Use middleware-provided requestId, fall back to header — not duplicated logic, single helper
 const getRequestId = (req: Request): string | undefined =>
-  (req.headers['x-request-id'] as string) || undefined;
+  (req as any).requestId || (req.headers['x-request-id'] as string) || undefined;
 
 export class OrderController {
   private service: OrderService;
@@ -20,12 +21,8 @@ export class OrderController {
   }
 
   createOrder = catchAsync(async (req: Request, res: Response) => {
+    // Validation is handled by validateOrderRequest middleware — no duplicate checks here
     const { customerId, productId, amount, quantity, idempotencyKey } = req.body;
-
-    if (!customerId || !productId || !amount) {
-      ApiResponse.badRequest(res, 'Missing required fields: customerId, productId, amount', getRequestId(req));
-      return;
-    }
 
     const result = await this.service.createOrder({
       customerId,
@@ -51,8 +48,9 @@ export class OrderController {
       : order.orderStatus === OrderStatus.FAILED
         ? PaymentStatus.FAILED
         : PaymentStatus.PENDING;
+    const orderData = (order as any).toJSON ? (order as any).toJSON() : order;
     ApiResponse.success(res, {
-      ...order.toJSON(),
+      ...orderData,
       paymentStatus
     });
   });

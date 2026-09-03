@@ -44,7 +44,8 @@ describe('OrderController', () => {
   test('createOrder returns 201 with order details', async () => {
     const ctrl = createController();
     const { req, res } = createReqRes();
-    req.body = { customerId: 'cust_1', productId: 'prod_1', amount: 100 };
+    req.body = { customerId: 'cust_1', productId: 'prod_1', amount: 100, idempotencyKey: 'ik_test_order_123' };
+    (req as any).idempotencyKey = 'ik_test_order_123';
 
     await ctrl.createOrder(req, res);
 
@@ -58,14 +59,16 @@ describe('OrderController', () => {
     });
   });
 
-  test('createOrder returns 400 when required fields missing', async () => {
-    const ctrl = createController();
-    const { req, res } = createReqRes();
+  test('createOrder forwards error when required fields missing', async () => {
+    const ctrl = createController({
+      createOrder: mock(() => Promise.reject(new Error('Idempotency key is required'))),
+    });
+    const { req, res, next } = createReqRes();
     req.body = {};
 
-    await ctrl.createOrder(req, res);
+    await ctrl.createOrder(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(next).toHaveBeenCalled();
   });
 
   test('createOrder returns 409 on stock reservation failure', async () => {

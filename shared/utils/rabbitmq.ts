@@ -36,7 +36,7 @@ export class RabbitMQ {
     try {
       this.connection = await amqp.connect(url);
 
-      this.channel = await this.connection.createChannel();
+      this.channel = await this.connection.createConfirmChannel();
 
       this.isConnected = true;
 
@@ -52,6 +52,7 @@ export class RabbitMQ {
         this.isConnected = false;
         this.connection = null;
         this.channel = null;
+        this.connectionPromise = null;
       });
 
       this.connection.on('close', () => {
@@ -59,6 +60,7 @@ export class RabbitMQ {
         this.isConnected = false;
         this.connection = null;
         this.channel = null;
+        this.connectionPromise = null;
       });
 
       this.connection.on('blocked', (reason: string) => {
@@ -84,7 +86,42 @@ export class RabbitMQ {
     }
 
     try {
-      await this.channel.assertQueue(queueName, options);
+      // Declare DLX/DLQ if not the DLQ itself - handle pre-existing queue without DLX args
+      if (!queueName.endsWith('_dlq')) {
+        const dlqName = `${queueName}_dlq`;
+        try {
+          await this.channel.assertQueue(dlqName, { durable: true });
+        } catch (e) {
+          logger.warn(`DLQ declare failed for ${dlqName}:`, e);
+        }
+        const optsWithDLX = {
+          ...options,
+          arguments: {
+            ...(options.arguments || {}),
+            'x-dead-letter-exchange': '',
+            'x-dead-letter-routing-key': dlqName,
+          },
+        };
+        try {
+          await this.channel.assertQueue(queueName, optsWithDLX);
+        } catch (e: any) {
+          const msg = e?.message || String(e);
+          if (msg.includes('precondition_failed') && msg.includes('x-dead-letter')) {
+            logger.warn(`Queue ${queueName} exists without DLX args (pre-existing volume) — falling back to plain declare`, { error: msg });
+            // Workaround: passive check or plain declare without DLX will succeed if queue exists
+            try {
+              await this.channel.checkQueue(queueName);
+              logger.info(`Queue ${queueName} already exists, using existing definition`);
+            } catch {
+              await this.channel.assertQueue(queueName, options);
+            }
+          } else {
+            throw e;
+          }
+        }
+      } else {
+        await this.channel.assertQueue(queueName, options);
+      }
       logger.info(`Queue created: ${queueName}`);
     } catch (error) {
       logger.error(`Failed to create queue ${queueName}:`, error);
@@ -99,10 +136,18 @@ export class RabbitMQ {
 
     try {
       const message = Buffer.from(JSON.stringify(data));
-      this.channel.sendToQueue(queueName, message, {
+      const sent = this.channel.sendToQueue(queueName, message, {
         persistent: true,
         contentType: 'application/json'
       });
+      if (!sent) {
+        throw new Error('sendToQueue returned false (write buffer full)');
+      }
+      // Wait for broker confirm if confirm channel
+      const confirmChannel: any = this.channel;
+      if (confirmChannel.waitForConfirms) {
+        await confirmChannel.waitForConfirms();
+      }
       logger.info(`Published to queue: ${queueName}`);
     } catch (error) {
       logger.error(`Failed to publish to queue ${queueName}:`, error);
@@ -132,26 +177,29 @@ export class RabbitMQ {
               return;
             }
 
-            let retryCount = 0;
-            try {
-              const data = JSON.parse(msg.content.toString());
-              retryCount = (data._retryCount as number) || 0;
-            } catch {}
+            const headers = (msg.properties.headers as Record<string, any>) || {};
+            const retryCount = (headers['x-retry-count'] as number) || 0;
 
             if (retryCount >= maxRetries - 1) {
-              logger.error(`Message failed after ${maxRetries} attempts, discarding`);
+              logger.error(`Message failed after ${maxRetries} attempts, sending to DLQ`);
               this.channel!.nack(msg, false, false);
               return;
             }
 
-            const data = JSON.parse(msg.content.toString());
-            data._retryCount = retryCount + 1;
-            this.channel!.sendToQueue(queueName, Buffer.from(JSON.stringify(data)), {
-              persistent: true,
-              contentType: 'application/json'
-            });
-            this.channel!.ack(msg);
-            logger.warn(`Message requeued with retry ${retryCount + 1}/${maxRetries}`);
+            const nextRetry = retryCount + 1;
+            try {
+              const data = JSON.parse(msg.content.toString());
+              this.channel!.sendToQueue(queueName, Buffer.from(JSON.stringify(data)), {
+                persistent: true,
+                contentType: 'application/json',
+                headers: { 'x-retry-count': nextRetry },
+              });
+              this.channel!.ack(msg);
+              logger.warn(`Message requeued with retry ${nextRetry}/${maxRetries} via header`);
+            } catch (e) {
+              logger.error('Failed to requeue message:', e);
+              this.channel!.nack(msg, false, false);
+            }
           }
         }
       }, { noAck: false });

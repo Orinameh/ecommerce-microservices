@@ -53,12 +53,18 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=5001
-      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - MONGODB_URI=${MONGODB_URI}
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Product Service
   product-service:
@@ -72,12 +78,18 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=5002
-      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - MONGODB_URI=${MONGODB_URI}
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Order Service
   order-service:
@@ -91,7 +103,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=5003
-      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - MONGODB_URI=${MONGODB_URI}
       - CUSTOMER_SERVICE_URL=http://customer-service:5001
       - PRODUCT_SERVICE_URL=http://product-service:5002
       - PAYMENT_SERVICE_URL=http://payment-service:5004
@@ -99,13 +111,19 @@ services:
       mongodb:
         condition: service_healthy
       customer-service:
-        condition: service_started
+        condition: service_healthy
       product-service:
-        condition: service_started
+        condition: service_healthy
       payment-service:
-        condition: service_started
+        condition: service_healthy
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # Payment Service
   payment-service:
@@ -119,7 +137,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=5004
-      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - MONGODB_URI=${MONGODB_URI}
       - RABBITMQ_URL=${RABBITMQ_URL:-amqp://rabbitmq:5672}
       - ORDER_SERVICE_URL=http://order-service:5003
     depends_on:
@@ -129,6 +147,12 @@ services:
         condition: service_healthy
     networks:
       - ecommerce-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Transaction Worker (runs separately)
   transaction-worker:
@@ -140,7 +164,7 @@ services:
     command: node dist/workers/transaction.worker.js
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin}
+      - MONGODB_URI=${MONGODB_URI}
       - RABBITMQ_URL=${RABBITMQ_URL:-amqp://rabbitmq:5672}
       - ORDER_SERVICE_URL=http://order-service:5003
     depends_on:
@@ -149,9 +173,9 @@ services:
       rabbitmq:
         condition: service_healthy
       payment-service:
-        condition: service_started
+        condition: service_healthy
       order-service:
-        condition: service_started
+        condition: service_healthy
     networks:
       - ecommerce-network
 

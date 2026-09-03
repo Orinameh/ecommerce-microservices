@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import { OrderRepository } from '../repositories/order.repository';
 import { IOrder } from '../models/order.model';
 import { CustomerService } from './customer.service';
@@ -26,9 +25,12 @@ export class OrderService {
     productId: string;
     amount: number;
     quantity?: number;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ order: IOrder; paymentStatus: PaymentStatus }> {
-    const key = data.idempotencyKey || uuidv4();
+    if (!data.idempotencyKey || typeof data.idempotencyKey !== 'string') {
+      throw new AppError('Idempotency key is required', 400);
+    }
+    const key = data.idempotencyKey;
     const quantity = data.quantity || 1;
 
     const existingOrder = await this.repository.findByIdempotencyKey(key);
@@ -43,8 +45,9 @@ export class OrderService {
     await this.customerService.validateCustomer(data.customerId);
 
     const product = await this.productService.validateProduct(data.productId);
-    if (product.stock < quantity) {
-      throw new AppError('Insufficient stock', 400);
+    const expectedAmount = product.price * quantity;
+    if (Math.abs(data.amount - expectedAmount) > 0.01) {
+      throw new AppError(`Amount mismatch: expected ${expectedAmount.toFixed(2)} for ${quantity}x ${product.name} at ${product.price}`, 400);
     }
 
     let order: IOrder;
@@ -71,10 +74,23 @@ export class OrderService {
 
     logger.info(`Order created: ${order._id}`);
 
-    await this.productService.reserveStock(data.productId, quantity);
-    logger.info(`Stock reserved: ${quantity} units for product ${data.productId}`);
+    try {
+      await this.productService.reserveStock(data.productId, quantity, key);
+      logger.info(`Stock reserved: ${quantity} units for product ${data.productId}`);
+    } catch (error: any) {
+      logger.warn(`Stock reservation failed for order ${order._id}, compensating: ${error.message}`);
+      try {
+        await this.repository.updateStatus(order._id.toString(), OrderStatus.FAILED);
+      } catch (e) {
+        logger.error(`Failed to mark order ${order._id} as FAILED after reserve failure`, e);
+      }
+      throw error;
+    }
 
-    this.processPaymentInBackground(key, data, order._id.toString(), quantity);
+    // Fire-and-forget payment but with compensation and unhandled rejection guard
+    void this.processPaymentInBackground(key, data, order._id.toString(), quantity).catch(err =>
+      logger.error(`Unhandled background payment error for order ${order._id}: ${err?.message}`, err)
+    );
 
     return { order, paymentStatus: PaymentStatus.PENDING };
   }
@@ -100,6 +116,12 @@ export class OrderService {
     const order = await this.repository.findById(id);
     if (!order) {
       throw new AppError('Order not found', 404);
+    }
+
+    // Idempotent: if already at desired status, return without error
+    if (order.orderStatus === status) {
+      logger.info(`Order ${id} already at status ${status}, idempotent return`);
+      return order;
     }
 
     const allowedTransitions: Record<string, OrderStatus[]> = {
@@ -143,12 +165,29 @@ export class OrderService {
       if (paymentResult.status === PaymentStatus.SUCCESS) {
         logger.info(`Order ${orderId} payment submitted, worker will confirm`);
       } else {
-        await this.productService.releaseStock(data.productId, quantity);
-        await this.repository.updateStatus(orderId, OrderStatus.FAILED);
-        logger.warn(`Order ${orderId} payment failed, stock released`);
+        await this.compensateOrder(orderId, data.productId, quantity, 'payment returned FAILED');
       }
     } catch (error: any) {
       logger.error(`Payment processing error for order ${orderId}: ${error.message}`);
+      await this.compensateOrder(orderId, data.productId, quantity, `payment error: ${error.message}`);
+    }
+  }
+
+  private async compensateOrder(orderId: string, productId: string, quantity: number, reason: string): Promise<void> {
+    try {
+      await this.productService.releaseStock(productId, quantity, orderId);
+      logger.info(`Stock released for order ${orderId} (${reason})`);
+    } catch (e: any) {
+      logger.error(`Failed to release stock for order ${orderId}: ${e.message}`);
+    }
+    try {
+      const current = await this.repository.findById(orderId);
+      if (current && current.orderStatus === OrderStatus.PENDING) {
+        await this.repository.updateStatus(orderId, OrderStatus.FAILED);
+        logger.warn(`Order ${orderId} marked FAILED (${reason})`);
+      }
+    } catch (e: any) {
+      logger.error(`Failed to mark order ${orderId} as FAILED: ${e.message}`);
     }
   }
 }

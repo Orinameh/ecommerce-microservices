@@ -55,24 +55,42 @@ export const timeoutMiddleware = (timeout?: number) => createTimeoutMiddleware(t
 
 export const idempotencyMiddleware = (req: Request, res: Response, next: any): void => {
   if (req.method === 'POST') {
-    const idempotencyKey = req.headers['idempotency-key'] || (req.body as any).idempotencyKey;
+    const idempotencyKey = (req.headers['idempotency-key'] as string) || (req.body as any).idempotencyKey;
 
     if (!idempotencyKey) {
-      (req as any).generatedIdempotencyKey = `ik_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      (req.body as any).idempotencyKey = (req as any).generatedIdempotencyKey;
-    } else {
-      (req as any).idempotencyKey = idempotencyKey;
-      (req.body as any).idempotencyKey = idempotencyKey;
+      res.status(400).json({
+        error: 'Missing idempotency key',
+        message: 'Idempotency-Key header or idempotencyKey body field is required',
+        timestamp: new Date().toISOString(),
+      });
+      return;
     }
+
+    if (typeof idempotencyKey !== 'string' || idempotencyKey.trim().length < 8) {
+      res.status(400).json({
+        error: 'Invalid idempotency key',
+        message: 'Idempotency key must be a string >= 8 chars',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    (req as any).idempotencyKey = idempotencyKey;
+    (req.body as any).idempotencyKey = idempotencyKey;
   }
   next();
 };
 
 export const validateOrderRequest = (req: Request, res: Response, next: any): void => {
   const { customerId, productId, amount, quantity } = req.body as any;
+  const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 
   if (!customerId) {
     res.status(400).json({ error: 'Missing customerId', timestamp: new Date().toISOString() });
+    return;
+  }
+  if (typeof customerId !== 'string' || !objectIdRegex.test(customerId)) {
+    res.status(400).json({ error: 'Invalid customerId format', timestamp: new Date().toISOString() });
     return;
   }
 
@@ -80,15 +98,21 @@ export const validateOrderRequest = (req: Request, res: Response, next: any): vo
     res.status(400).json({ error: 'Missing productId', timestamp: new Date().toISOString() });
     return;
   }
+  if (typeof productId !== 'string' || !objectIdRegex.test(productId)) {
+    res.status(400).json({ error: 'Invalid productId format', timestamp: new Date().toISOString() });
+    return;
+  }
 
-  if (!amount || amount <= 0) {
+  if (amount === undefined || amount === null || typeof amount !== 'number' || amount <= 0 || !Number.isFinite(amount)) {
     res.status(400).json({ error: 'Amount must be greater than 0', timestamp: new Date().toISOString() });
     return;
   }
 
-  if (quantity && quantity <= 0) {
-    res.status(400).json({ error: 'Quantity must be greater than 0', timestamp: new Date().toISOString() });
-    return;
+  if (quantity !== undefined) {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      res.status(400).json({ error: 'Quantity must be a positive integer', timestamp: new Date().toISOString() });
+      return;
+    }
   }
 
   next();

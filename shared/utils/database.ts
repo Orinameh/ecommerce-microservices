@@ -16,10 +16,18 @@ export class Database {
   }
 
   async connect(uri: string): Promise<void> {
-    // If already connected, return
-    if (this.isConnected) {
+    // Use mongoose readyState as source of truth (1 = connected)
+    if (mongoose.connection.readyState === 1) {
+      this.isConnected = true;
       logger.info('Database already connected');
       return;
+    }
+    if (mongoose.connection.readyState === 2) {
+      // connecting - wait for existing promise if any
+      if (this.connectionPromise) {
+        await this.connectionPromise;
+        return;
+      }
     }
 
     // If connection is in progress, wait for it
@@ -30,8 +38,11 @@ export class Database {
 
     // Start connection
     this.connectionPromise = this.doConnect(uri);
-    await this.connectionPromise;
-    this.connectionPromise = null;
+    try {
+      await this.connectionPromise;
+    } finally {
+      this.connectionPromise = null;
+    }
   }
 
   private async doConnect(uri: string): Promise<void> {
@@ -48,31 +59,42 @@ export class Database {
       this.isConnected = true;
       logger.info('Database connected successfully');
       
-      // Setup connection event handlers
-      mongoose.connection.on('error', (error) => {
-        logger.error('Database connection error:', error);
-        this.isConnected = false;
-      });
+      // Setup connection event handlers (once to avoid duplicate listeners)
+      if (mongoose.connection.listenerCount('error') === 0) {
+        mongoose.connection.on('error', (error) => {
+          logger.error('Database connection error:', error);
+          this.isConnected = false;
+          this.connectionPromise = null;
+        });
 
-      mongoose.connection.on('disconnected', () => {
-        logger.warn('Database disconnected');
-        this.isConnected = false;
-      });
+        mongoose.connection.on('disconnected', () => {
+          logger.warn('Database disconnected');
+          this.isConnected = false;
+          this.connectionPromise = null;
+        });
 
-      mongoose.connection.on('reconnected', () => {
-        logger.info('Database reconnected');
-        this.isConnected = true;
-      });
+        mongoose.connection.on('reconnected', () => {
+          logger.info('Database reconnected');
+          this.isConnected = true;
+        });
+
+        mongoose.connection.on('close', () => {
+          logger.warn('Database connection closed');
+          this.isConnected = false;
+          this.connectionPromise = null;
+        });
+      }
 
     } catch (error) {
       logger.error('Database connection failed:', error);
       this.isConnected = false;
+      this.connectionPromise = null;
       throw error;
     }
   }
 
   async disconnect(): Promise<void> {
-    if (!this.isConnected) {
+    if (!this.isConnected && mongoose.connection.readyState === 0) {
       logger.info('Database already disconnected');
       return;
     }

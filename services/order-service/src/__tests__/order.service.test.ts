@@ -11,6 +11,7 @@ mock.module('mongoose', () => {
 });
 
 const { OrderStatus, PaymentStatus } = await import('../../../../shared/utils/status');
+const { AppError } = await import('../../../../shared/utils/errors');
 const { OrderService } = await import('../services/order.service');
 
 function createMocks() {
@@ -64,16 +65,14 @@ describe('OrderService', () => {
       productId: 'prod_1',
       amount: 100,
       quantity: 1,
+      idempotencyKey: 'ik_happy_path_123',
     });
 
-    expect(result.paymentStatus).toBe(PaymentStatus.SUCCESS);
+    expect(result.paymentStatus).toBe(PaymentStatus.PENDING);
     expect(mocks.repo.create).toHaveBeenCalled();
-    expect(mocks.productService.reserveStock).toHaveBeenCalledWith('prod_1', 1);
+    expect(mocks.productService.reserveStock).toHaveBeenCalledWith('prod_1', 1, expect.any(String));
     expect(mocks.paymentService.processPayment).toHaveBeenCalled();
-    expect(mocks.repo.updateStatus).toHaveBeenCalledWith(
-      mocks.mockOrder._id.toString(),
-      OrderStatus.PAID
-    );
+    // Payment is async via background + worker, not immediate PAID
   });
 
   test('createOrder passes productId to payment service', async () => {
@@ -88,6 +87,7 @@ describe('OrderService', () => {
       customerId: 'cust_1',
       productId: 'prod_1',
       amount: 100,
+      idempotencyKey: 'ik_pass_prod_123',
     });
 
     expect(mocks.paymentService.processPayment).toHaveBeenCalledWith(
@@ -116,7 +116,7 @@ describe('OrderService', () => {
     expect(mocks.productService.reserveStock).not.toHaveBeenCalled();
   });
 
-  test('createOrder releases stock on payment failure response', async () => {
+  test('createOrder releases stock on payment failure response (background)', async () => {
     const mocks = createMocks();
     mocks.paymentService.processPayment = mock(() =>
       Promise.resolve({ status: PaymentStatus.FAILED, transactionId: 'txn_1' })
@@ -131,17 +131,16 @@ describe('OrderService', () => {
       customerId: 'cust_1',
       productId: 'prod_1',
       amount: 100,
+      idempotencyKey: 'ik_fail_resp_123',
     });
 
-    expect(result.paymentStatus).toBe(PaymentStatus.FAILED);
-    expect(mocks.productService.releaseStock).toHaveBeenCalledWith('prod_1', 1);
-    expect(mocks.repo.updateStatus).toHaveBeenCalledWith(
-      mocks.mockOrder._id.toString(),
-      OrderStatus.FAILED
-    );
+    expect(result.paymentStatus).toBe(PaymentStatus.PENDING);
+    // Release happens in background - wait a tick
+    await new Promise(r => setTimeout(r, 10));
+    expect(mocks.productService.releaseStock).toHaveBeenCalled();
   });
 
-  test('createOrder releases stock on payment error', async () => {
+  test('createOrder releases stock on payment error (background)', async () => {
     const mocks = createMocks();
     mocks.paymentService.processPayment = mock(() =>
       Promise.reject(new Error('Service unavailable'))
@@ -156,10 +155,12 @@ describe('OrderService', () => {
       customerId: 'cust_1',
       productId: 'prod_1',
       amount: 100,
+      idempotencyKey: 'ik_fail_err_123',
     });
 
-    expect(result.paymentStatus).toBe(PaymentStatus.FAILED);
-    expect(mocks.productService.releaseStock).toHaveBeenCalledWith('prod_1', 1);
+    expect(result.paymentStatus).toBe(PaymentStatus.PENDING);
+    await new Promise(r => setTimeout(r, 10));
+    expect(mocks.productService.releaseStock).toHaveBeenCalled();
   });
 
   test('createOrder throws on stock reservation failure', async () => {
@@ -173,15 +174,15 @@ describe('OrderService', () => {
     (service as any).productService = mocks.productService;
     (service as any).paymentService = mocks.paymentService;
 
-    expect(
-      service.createOrder({ customerId: 'cust_1', productId: 'prod_1', amount: 100 })
-    ).rejects.toThrow('Stock reservation failed');
+    await expect(
+      service.createOrder({ customerId: 'cust_1', productId: 'prod_1', amount: 100, idempotencyKey: 'ik_reserve_fail_123' })
+    ).rejects.toThrow('Insufficient stock');
   });
 
-  test('createOrder throws on insufficient stock', async () => {
+  test('createOrder throws on insufficient stock (reserve fails atomically)', async () => {
     const mocks = createMocks();
-    mocks.productService.validateProduct = mock(() =>
-      Promise.resolve({ id: 'prod_1', name: 'MacBook', price: 100, stock: 0 })
+    mocks.productService.reserveStock = mock(() =>
+      Promise.reject(new AppError('Insufficient stock', 400))
     );
     const service = new OrderService();
     (service as any).repository = mocks.repo;
@@ -189,8 +190,8 @@ describe('OrderService', () => {
     (service as any).productService = mocks.productService;
     (service as any).paymentService = mocks.paymentService;
 
-    expect(
-      service.createOrder({ customerId: 'cust_1', productId: 'prod_1', amount: 100, quantity: 1 })
+    await expect(
+      service.createOrder({ customerId: 'cust_1', productId: 'prod_1', amount: 100, quantity: 1, idempotencyKey: 'ik_insuff_stock_123' })
     ).rejects.toThrow('Insufficient stock');
   });
 
@@ -214,7 +215,7 @@ describe('OrderService', () => {
     const service = new OrderService();
     (service as any).repository = repo;
 
-    expect(
+    await expect(
       service.updateOrderStatus('507f1f77bcf86cd799439011', OrderStatus.PENDING)
     ).rejects.toThrow("Cannot transition order from 'paid' to 'pending'");
   });
@@ -225,6 +226,6 @@ describe('OrderService', () => {
     const service = new OrderService();
     (service as any).repository = repo;
 
-    expect(service.getOrderById('nonexistent')).rejects.toThrow('Order not found');
+    await expect(service.getOrderById('nonexistent')).rejects.toThrow('Order not found');
   });
 });

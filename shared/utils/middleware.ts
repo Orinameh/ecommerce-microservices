@@ -21,6 +21,14 @@ export function createSecurityMiddleware(
   corsOrigins: string[],
   allowedHeaders: string[] = ['Content-Type', 'Authorization', 'X-Request-Id']
 ) {
+  const isWildcard = corsOrigins.includes('*');
+  const corsOriginOption: any = isWildcard ? '*' : corsOrigins;
+  // Browsers reject credentials:true with wildcard
+  const credentials = isWildcard ? false : true;
+  if (isWildcard && process.env.NODE_ENV === 'production') {
+    // Will be caught by config validation, but log warning if somehow wildcard reaches here
+    console.warn('WARNING: CORS wildcard * should not be used in production');
+  }
   return [
     helmet({
       contentSecurityPolicy: {
@@ -36,11 +44,11 @@ export function createSecurityMiddleware(
     }),
     compression(),
     cors({
-      origin: corsOrigins,
+      origin: corsOriginOption as any,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders,
       exposedHeaders: ['X-Request-Id'],
-      credentials: true,
+      credentials,
       maxAge: 86400,
     }),
     express.json({ limit: '10mb' }),

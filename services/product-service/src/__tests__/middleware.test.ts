@@ -47,7 +47,7 @@ function createReqRes() {
 describe('validateStockOperation', () => {
   test('passes when productId and quantity are valid', () => {
     const { req, res, next } = createReqRes();
-    req.body = { productId: 'p1', quantity: 5 };
+    req.body = { productId: '507f1f77bcf86cd799439011', quantity: 5 };
 
     validateStockOperation(req, res, next);
 
@@ -66,7 +66,7 @@ describe('validateStockOperation', () => {
 
   test('rejects missing quantity', () => {
     const { req, res, next } = createReqRes();
-    req.body = { productId: 'p1' };
+    req.body = { productId: '507f1f77bcf86cd799439011' };
 
     validateStockOperation(req, res, next);
 
@@ -75,7 +75,7 @@ describe('validateStockOperation', () => {
 
   test('rejects quantity of 0', () => {
     const { req, res, next } = createReqRes();
-    req.body = { productId: 'p1', quantity: 0 };
+    req.body = { productId: '507f1f77bcf86cd799439011', quantity: 0 };
 
     validateStockOperation(req, res, next);
 
@@ -84,7 +84,16 @@ describe('validateStockOperation', () => {
 
   test('rejects negative quantity', () => {
     const { req, res, next } = createReqRes();
-    req.body = { productId: 'p1', quantity: -1 };
+    req.body = { productId: '507f1f77bcf86cd799439011', quantity: -1 };
+
+    validateStockOperation(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('rejects invalid productId format', () => {
+    const { req, res, next } = createReqRes();
+    req.body = { productId: 'bad', quantity: 5 };
 
     validateStockOperation(req, res, next);
 

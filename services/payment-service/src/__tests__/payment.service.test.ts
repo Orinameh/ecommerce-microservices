@@ -53,6 +53,7 @@ describe('PaymentService', () => {
       orderId: 'ord_1',
       amount: 100,
       productId: 'prod_1',
+      idempotencyKey: 'ik_test_pay_123',
     });
 
     expect(result.status).toBe('success');
@@ -112,7 +113,7 @@ describe('PaymentService', () => {
     const service = new PaymentService();
     (service as any).repository = mocks.repo;
 
-    expect(service.getTransactionById('nonexistent')).rejects.toThrow('Transaction not found');
+    await expect(service.getTransactionById('nonexistent')).rejects.toThrow('Transaction not found');
   });
 
   test('getAllTransactions returns all transactions', async () => {
@@ -134,6 +135,7 @@ describe('PaymentService', () => {
       customerId: 'cust_1',
       orderId: 'ord_1',
       amount: 100,
+      idempotencyKey: 'ik_no_prod_123',
     });
 
     expect(result.status).toBe('success');

@@ -1,7 +1,7 @@
 import express from 'express';
 import { Database } from '../../../shared/utils/database';
 import { config } from './config';
-import { securityMiddleware, rateLimiter, loggingMiddleware, errorHandler, notFoundHandler } from './middleware';
+import { securityMiddleware, rateLimiter, loggingMiddleware, errorHandler, notFoundHandler, requestIdMiddleware, timeoutMiddleware } from './middleware';
 import paymentRoutes from './routes/payment.route';
 import { PaymentService } from './services/payment.service';
 import logger from '../../../shared/utils/logger';
@@ -9,9 +9,11 @@ import logger from '../../../shared/utils/logger';
 const app = express();
 let paymentService: PaymentService;
 
+app.use(requestIdMiddleware);
 app.use(securityMiddleware);
 app.use(rateLimiter);
 app.use(loggingMiddleware);
+app.use(timeoutMiddleware());
 
 app.get('/health', (req, res) => {
   res.status(200).json({

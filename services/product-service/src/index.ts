@@ -7,6 +7,8 @@ import {
   loggingMiddleware,
   errorHandler,
   notFoundHandler,
+  requestIdMiddleware,
+  timeoutMiddleware,
 } from "./middleware";
 import productRoutes from "./routes/product.route";
 import { ProductService } from "./services/product.service";
@@ -14,9 +16,11 @@ import logger from "../../../shared/utils/logger";
 
 const app = express();
 
+app.use(requestIdMiddleware);
 app.use(securityMiddleware);
 app.use(rateLimiter);
 app.use(loggingMiddleware);
+app.use(timeoutMiddleware());
 
 app.get("/health", (req, res) => {
   res.status(200).json({

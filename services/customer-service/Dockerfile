@@ -2,11 +2,11 @@ FROM oven/bun:latest AS builder
 
 WORKDIR /app
 
-COPY services/customer-service/package.json services/customer-service/bun.lockb* ./services/customer-service/
-COPY shared/package.json shared/bun.lockb* ./shared/
+COPY services/customer-service/package.json services/customer-service/bun.lock* ./services/customer-service/
+COPY shared/package.json shared/bun.lock* ./shared/
 
-RUN cd services/customer-service && bun install --frozen-lockfile
-RUN cd shared && bun install --frozen-lockfile
+RUN cd services/customer-service && bun install --frozen-lockfile || bun install
+RUN cd shared && bun install --frozen-lockfile || bun install
 
 COPY shared/ ./shared/
 COPY services/customer-service/ ./services/customer-service/
@@ -14,6 +14,8 @@ COPY services/customer-service/ ./services/customer-service/
 RUN cd services/customer-service && bun build src/index.ts --outdir ./dist --target node --external mongoose
 
 FROM node:26-alpine AS runner
+
+RUN apk add --no-cache wget
 
 WORKDIR /app
 

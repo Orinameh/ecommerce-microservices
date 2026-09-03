@@ -42,6 +42,8 @@ $MONGO --quiet --eval '
   const db = db.getSiblingDB("ecommerce");
   const orderCount = db.orders.deleteMany({}).deletedCount;
   const txnCount = db.transactions.deleteMany({}).deletedCount;
+  try { db.outboxes.deleteMany({}); } catch {}
+  try { db.stockreservations.deleteMany({}); } catch {}
   const first = db.products.find().sort({ _id: 1 }).limit(1).toArray()[0];
   if (first) {
     db.products.updateOne({ _id: first._id }, { $set: { stock: 30 } });
@@ -52,9 +54,11 @@ $MONGO --quiet --eval '
 echo ""
 echo "=== Getting customer and product IDs ==="
 CUSTOMER_ID=$(curl -s http://localhost:5001/api/customers | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['_id'])")
-PRODUCT_ID=$(curl -s http://localhost:5002/api/products | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['_id'])")
+PRODUCT_JSON=$(curl -s http://localhost:5002/api/products | python3 -c "import sys,json; d=json.load(sys.stdin)[0]; print(d['_id'] + '|' + str(d['price']))")
+PRODUCT_ID=$(echo "$PRODUCT_JSON" | cut -d'|' -f1)
+PRODUCT_PRICE=$(echo "$PRODUCT_JSON" | cut -d'|' -f2)
 echo "Customer: $CUSTOMER_ID"
-echo "Product:  $PRODUCT_ID"
+echo "Product:  $PRODUCT_ID (price: $PRODUCT_PRICE)"
 
 echo ""
 echo "=================================================="
@@ -64,7 +68,7 @@ IDEMPOTENCY_KEY="test-$(date +%s)"
 CREATE_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://localhost:5003/api/orders \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
-  -d "{\"customerId\":\"$CUSTOMER_ID\",\"productId\":\"$PRODUCT_ID\",\"amount\":9.99}")
+  -d "{\"customerId\":\"$CUSTOMER_ID\",\"productId\":\"$PRODUCT_ID\",\"amount\":$PRODUCT_PRICE}")
 HTTP_CODE=$(echo "$CREATE_RESP" | grep "HTTP_CODE:" | cut -d: -f2)
 BODY=$(echo "$CREATE_RESP" | grep -v "HTTP_CODE:")
 ORDER_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['orderId'])")
@@ -127,7 +131,7 @@ echo "=================================================="
 IDEM_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://localhost:5003/api/orders \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
-  -d "{\"customerId\":\"$CUSTOMER_ID\",\"productId\":\"$PRODUCT_ID\",\"amount\":9.99}")
+  -d "{\"customerId\":\"$CUSTOMER_ID\",\"productId\":\"$PRODUCT_ID\",\"amount\":$PRODUCT_PRICE}")
 IDEM_HTTP=$(echo "$IDEM_RESP" | grep "HTTP_CODE:" | cut -d: -f2)
 IDEM_BODY=$(echo "$IDEM_RESP" | grep -v "HTTP_CODE:")
 IDEM_ORDER_ID=$(echo "$IDEM_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['orderId'])")

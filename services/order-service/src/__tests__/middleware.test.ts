@@ -44,16 +44,16 @@ function createReqRes() {
 }
 
 describe('idempotencyMiddleware', () => {
-  test('generates idempotency key when not provided on POST', () => {
+  test('rejects missing idempotency key on POST', () => {
     const { req, res, next } = createReqRes();
     req.method = 'POST';
     req.body = {};
 
     idempotencyMiddleware(req, res, next);
 
-    expect(req.body.idempotencyKey).toBeDefined();
-    expect(req.body.idempotencyKey).toStartWith('ik_');
-    expect(next).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Missing idempotency key' }));
+    expect(next).not.toHaveBeenCalled();
   });
 
   test('uses provided idempotency key from body', () => {
@@ -92,9 +92,11 @@ describe('idempotencyMiddleware', () => {
 });
 
 describe('validateOrderRequest', () => {
+  const validCust = '507f1f77bcf86cd799439011';
+  const validProd = '507f1f77bcf86cd799439012';
   test('passes when all fields valid', () => {
     const { req, res, next } = createReqRes();
-    req.body = { customerId: 'c1', productId: 'p1', amount: 100, quantity: 2 };
+    req.body = { customerId: validCust, productId: validProd, amount: 100, quantity: 2 };
 
     validateOrderRequest(req, res, next);
 
@@ -103,7 +105,7 @@ describe('validateOrderRequest', () => {
 
   test('rejects missing customerId', () => {
     const { req, res, next } = createReqRes();
-    req.body = { productId: 'p1', amount: 100 };
+    req.body = { productId: validProd, amount: 100 };
 
     validateOrderRequest(req, res, next);
 
@@ -114,7 +116,7 @@ describe('validateOrderRequest', () => {
 
   test('rejects missing productId', () => {
     const { req, res, next } = createReqRes();
-    req.body = { customerId: 'c1', amount: 100 };
+    req.body = { customerId: validCust, amount: 100 };
 
     validateOrderRequest(req, res, next);
 
@@ -124,7 +126,7 @@ describe('validateOrderRequest', () => {
 
   test('rejects amount <= 0', () => {
     const { req, res, next } = createReqRes();
-    req.body = { customerId: 'c1', productId: 'p1', amount: 0 };
+    req.body = { customerId: validCust, productId: validProd, amount: 0 };
 
     validateOrderRequest(req, res, next);
 
@@ -134,7 +136,7 @@ describe('validateOrderRequest', () => {
 
   test('rejects quantity <= 0', () => {
     const { req, res, next } = createReqRes();
-    req.body = { customerId: 'c1', productId: 'p1', amount: 100, quantity: -1 };
+    req.body = { customerId: validCust, productId: validProd, amount: 100, quantity: -1 };
 
     validateOrderRequest(req, res, next);
 
@@ -143,11 +145,30 @@ describe('validateOrderRequest', () => {
 
   test('allows missing quantity (defaults to 1)', () => {
     const { req, res, next } = createReqRes();
-    req.body = { customerId: 'c1', productId: 'p1', amount: 100 };
+    req.body = { customerId: validCust, productId: validProd, amount: 100 };
 
     validateOrderRequest(req, res, next);
 
     expect(next).toHaveBeenCalled();
+  });
+
+  test('rejects invalid customerId format', () => {
+    const { req, res, next } = createReqRes();
+    req.body = { customerId: 'invalid', productId: validProd, amount: 100 };
+
+    validateOrderRequest(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid customerId format' }));
+  });
+
+  test('rejects invalid productId format', () => {
+    const { req, res, next } = createReqRes();
+    req.body = { customerId: validCust, productId: 'bad-id', amount: 100 };
+
+    validateOrderRequest(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
   });
 });
 

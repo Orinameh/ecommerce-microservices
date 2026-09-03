@@ -84,8 +84,14 @@ export class HttpClient {
     }
   }
 
-  // Generic POST with retry and circuit breaker
+  // Generic POST with retry and circuit breaker - non-idempotent POSTs are not retried unless Idempotency-Key present
   async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const hasIdempotencyKey = !!(
+      (config?.headers as any)?.['Idempotency-Key'] ||
+      (config?.headers as any)?.['idempotency-key'] ||
+      (data as any)?.idempotencyKey
+    );
+    const effectiveRetries = hasIdempotencyKey ? this.maxRetries : 1;
     try {
       const result = await withCircuitBreaker(this.serviceName, async () => {
         return await withRetry(
@@ -94,7 +100,7 @@ export class HttpClient {
             return response.data;
           },
           {
-            maxRetries: this.maxRetries,
+            maxRetries: effectiveRetries,
             initialDelay: this.retryDelay,
             retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'NetworkError', '503']
           },

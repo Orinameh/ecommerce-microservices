@@ -47,22 +47,18 @@ export class ProductController {
   });
 
   reserveStock = catchAsync(async (req: Request, res: Response) => {
-    const { productId, quantity } = req.body;
-    if (!productId || !quantity) {
-      ApiResponse.badRequest(res, 'Missing productId or quantity', requestId(req));
-      return;
-    }
-    const product = await this.service.reserveStock(productId, quantity);
+    // Validation via validateStockOperation middleware — single source
+    const { productId, quantity, idempotencyKey } = req.body;
+    const key = (req.headers['idempotency-key'] as string) || idempotencyKey;
+    const product = await this.service.reserveStock(productId, quantity, key);
     ApiResponse.success(res, { success: true, product });
   });
 
   releaseStock = catchAsync(async (req: Request, res: Response) => {
-    const { productId, quantity } = req.body;
-    if (!productId || !quantity) {
-      ApiResponse.badRequest(res, 'Missing productId or quantity', requestId(req));
-      return;
-    }
-    const product = await this.service.releaseStock(productId, quantity);
+    // Validation via validateStockOperation middleware — single source
+    const { productId, quantity, idempotencyKey } = req.body;
+    const key = (req.headers['idempotency-key'] as string) || idempotencyKey;
+    const product = await this.service.releaseStock(productId, quantity, key);
     ApiResponse.success(res, { success: true, product });
   });
 }
