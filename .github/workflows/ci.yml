@@ -1,0 +1,169 @@
+name: CI — Build & Push (SHA tag, never :latest)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  # For AWS ECR / GCP AR, set secrets and uncomment below
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [customer-service, product-service, order-service, payment-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set SHA tag
+        id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Docker meta (lowercase, SHA — never :latest)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
+          # lowercases owner/repo automatically, handles fork PRs
+          tags: |
+            type=sha,prefix=,format=short
+            type=sha,prefix=sha-,format=short
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # For ECR: uncomment and set AWS secrets
+      # - uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: us-east-1
+      # - uses: aws-actions/amazon-ecr-login@v2
+
+      # For GCP: uncomment
+      # - uses: google-github-actions/auth@v2
+      #   with:
+      #     credentials_json: ${{ secrets.GCP_SA_KEY }}
+      # - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Never push :latest — immutable SHA only (meta handles lowercasing)
+
+      # Image tag is SHA via docker/metadata-action — no :latest
+
+  # Single GitOps commit — aligns infra/k8s/* (ghcr.io/your-org/...:v1.0.0) with GHCR's ghcr.io/${{ github.repository_owner }}/...:sha-xxxx
+  # No clash: k8s placeholder v1.0.0 is overwritten with immutable SHA, never :latest
+  update-k8s:
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set SHA tag
+        run: echo "TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+      - name: Update k8s manifests to SHA (overlays/production)
+        run: |
+          cd infra/k8s/overlays/production
+          kustomize edit set image ghcr.io/your-org/customer-service=ghcr.io/${{ github.repository_owner }}/customer-service:${{ env.TAG }}
+          kustomize edit set image ghcr.io/your-org/product-service=ghcr.io/${{ github.repository_owner }}/product-service:${{ env.TAG }}
+          kustomize edit set image ghcr.io/your-org/order-service=ghcr.io/${{ github.repository_owner }}/order-service:${{ env.TAG }}
+          kustomize edit set image ghcr.io/your-org/payment-service=ghcr.io/${{ github.repository_owner }}/payment-service:${{ env.TAG }}
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add kustomization.yaml
+          git diff --cached --quiet || git commit -m "chore(k8s): bump images to ${{ env.TAG }}"
+          git push || echo "no push"
+
+  # Uncomment for ArgoCD auto-sync via GitOps — no manual kubectl
+  # deploy:
+  #   needs: build-and-push
+  #   if: github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: |
+  #         # ArgoCD will sync infra/k8s automatically if Application has automated sync
+  #         echo "Pushed ${{ needs.build-and-push.outputs.tag }} — ArgoCD syncing"
+
+  # --- OPT-IN: Cloud infra & K8s (uncomment to enable) ---
+  # Requires secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, GCP_SA_KEY, KUBE_CONFIG
+  # Keeps docker-compose for local; k8s is separate (infra/k8s) as per infra/README.md
+  # terraform-aws:
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   defaults:
+  #     run:
+  #       working-directory: infra/aws
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: hashicorp/setup-terraform@v3
+  #     - uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: us-east-1
+  #     - run: terraform init
+  #     - run: terraform plan -out=tfplan
+  #     # - run: terraform apply -auto-approve tfplan # opt-in: manual approval recommended
+
+  # terraform-gcp:
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   defaults:
+  #     run:
+  #       working-directory: infra/gcp
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: hashicorp/setup-terraform@v3
+  #     - uses: google-github-actions/auth@v2
+  #       with:
+  #         credentials_json: ${{ secrets.GCP_SA_KEY }}
+  #     - uses: google-github-actions/setup-gcloud@v2
+  #     - run: terraform init
+  #     - run: terraform plan -out=tfplan
+  #     # - run: terraform apply -auto-approve tfplan
+
+  # k8s-deploy:
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: azure/setup-kubectl@v4
+  #     - run: echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
+  #     - run: KUBECONFIG=/tmp/kubeconfig kubectl apply -k infra/k8s/overlays/production
+  #     - run: KUBECONFIG=/tmp/kubeconfig kubectl -n ecommerce rollout status deployment/order-service --timeout=120s
+  #     # Or rely on ArgoCD: push SHA tag above and ArgoCD syncs infra/k8s/overlays/production automatically

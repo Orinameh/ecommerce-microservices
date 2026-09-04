@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-services
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: ecommerce-microservices
+  namespaceSelector:
+    matchNames:
+      - ecommerce
+  endpoints:
+    - port: http
+      path: /health
+      interval: 15s
+      scrapeTimeout: 5s
+---
+# If not using ServiceMonitor CRD, annotate Services instead:
+# metadata:
+#   annotations:
+#     prometheus.io/scrape: "true"
+#     prometheus.io/port: "5001"

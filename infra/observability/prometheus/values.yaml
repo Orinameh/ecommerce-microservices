@@ -1,0 +1,18 @@
+# Minimal kube-prometheus-stack values for learning — prod pin version + enable persistence
+grafana:
+  enabled: true
+  adminPassword: admin
+  persistence:
+    enabled: false
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+alertmanager:
+  enabled: false

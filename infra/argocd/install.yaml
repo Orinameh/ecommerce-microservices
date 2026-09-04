@@ -1,0 +1,16 @@
+# Install ArgoCD (reference) — run once per cluster
+# Option A: Helm (recommended for AWS/GCP)
+#   helm repo add argo https://argoproj.github.io/argo-helm
+#   helm upgrade --install argocd argo/argo-cd --namespace argocd --create-namespace \
+#     -f infra/argocd/values.yaml
+# Option B: Kustomize (quick learning)
+#   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-install-instructions
+  namespace: argocd
+data:
+  instructions: |
+    ArgoCD not yet installed — see README.md

@@ -1,0 +1,18 @@
+# ArgoCD Helm values — minimal for learning, prod harden via infra/aws/gcp
+configs:
+  params:
+    server.insecure: true
+server:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts: [argocd.ecommerce.local]
+    https: false
+dex:
+  enabled: false
+redis-ha:
+  enabled: false
+controller:
+  replicas: 1

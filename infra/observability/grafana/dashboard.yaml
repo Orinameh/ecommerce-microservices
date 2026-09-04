@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-dashboard
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  ecommerce.json: |
+    {
+      "title": "Ecommerce Microservices",
+      "panels": [
+        {"title": "Order Rate", "targets": [{"expr": "rate(http_requests_total{namespace=\"ecommerce\"}[5m])"}]},
+        {"title": "Payment Outbox Pending", "targets": [{"expr": "outbox_pending{namespace=\"ecommerce\"}"}]},
+        {"title": "Circuit Breaker State", "targets": [{"expr": "circuit_breaker_state{namespace=\"ecommerce\"}"}]},
+        {"title": "RabbitMQ Queue Depth", "targets": [{"expr": "rabbitmq_queue_messages{queue=\"transaction_queue\"}"}]},
+        {"title": "MongoDB Connections", "targets": [{"expr": "mongodb_connections{state=\"current\"}"}]}
+      ]
+    }

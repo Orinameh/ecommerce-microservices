@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-ingress
+  namespace: ecommerce
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # ROBUST PROD (uncomment for cloud):
+    # AWS ALB: alb.ingress.kubernetes.io/scheme: internet-facing
+    #   alb.ingress.kubernetes.io/target-type: ip
+    #   alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:...
+    #   alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
+    # GCP GCLB: kubernetes.io/ingress.class: gce
+    #   networking.gke.io/managed-certificates: ecommerce-cert
+    #   kubernetes.io/ingress.global-static-ip-name: ecommerce-ip
+spec:
+  ingressClassName: nginx # prod: alb (AWS) or gce (GCP) via helm aws-load-balancer-controller / GKE ingress
+  # ROBUST: add TLS:
+  # tls:
+  # - hosts: [ecommerce.example.com]
+  #   secretName: ecommerce-tls
+  rules:
+    - host: ecommerce.local
+      http:
+        paths:
+          - path: /api/customers
+            pathType: Prefix
+            backend:
+              service:
+                name: customer-service
+                port:
+                  number: 5001
+          - path: /api/products
+            pathType: Prefix
+            backend:
+              service:
+                name: product-service
+                port:
+                  number: 5002
+          - path: /api/orders
+            pathType: Prefix
+            backend:
+              service:
+                name: order-service
+                port:
+                  number: 5003
+          - path: /api/payments
+            pathType: Prefix
+            backend:
+              service:
+                name: payment-service
+                port:
+                  number: 5004

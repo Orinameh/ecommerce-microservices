@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ecommerce
+data:
+  NODE_ENV: "production"
+  CUSTOMER_SERVICE_URL: "http://customer-service:5001"
+  PRODUCT_SERVICE_URL: "http://product-service:5002"
+  PAYMENT_SERVICE_URL: "http://payment-service:5004"
+  ORDER_SERVICE_URL: "http://order-service:5003"
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"

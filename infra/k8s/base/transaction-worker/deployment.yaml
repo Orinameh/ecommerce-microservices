@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-worker
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transaction-worker
+  template:
+    metadata:
+      labels:
+        app: transaction-worker
+    spec:
+      containers:
+        - name: worker
+          # Uses same image as payment-service (Dockerfile builds both) - must use same immutable tag, never :latest
+          image: ghcr.io/your-org/payment-service:v1.0.0 # CI overrides with SHA
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/workers/transaction.worker.js"]
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NODE_ENV
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGODB_URI
+            - name: RABBITMQ_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_URL
+            - name: ORDER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ORDER_SERVICE_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi

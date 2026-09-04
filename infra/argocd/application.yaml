@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # For learning: local path or GitHub. Replace repoURL with your fork
+    repoURL: https://github.com/your-org/ecommerce-microservices
+    targetRevision: HEAD
+    path: infra/k8s/overlays/production
+    # If using Helm for k8s, use helm: { values: ... }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ecommerce
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce-observability
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/ecommerce-microservices
+    targetRevision: HEAD
+    path: infra/observability
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,37 @@
+# ROBUST PROD — NetworkPolicy zero-trust (commented, opt-in)
+# Current: no NetworkPolicy — ecommerce can talk to observability, kube-system
+# Prod: default deny + per-service allow — apply after CNI supports it (Calico/Cilium)
+---
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: default-deny
+#   namespace: ecommerce
+# spec:
+#   podSelector: {}
+#   policyTypes: [Ingress, Egress]
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: order-service-allow
+#   namespace: ecommerce
+# spec:
+#   podSelector:
+#     matchLabels: { app: order-service }
+#   policyTypes: [Ingress, Egress]
+#   ingress:
+#   - from: [{ podSelector: { matchLabels: { app: ingress-nginx } } }]
+#     ports: [{ port: 5003 }]
+#   - from: [{ podSelector: { matchLabels: { app: payment-service } } }] # worker callback PUT /orders/status
+#   egress:
+#   - to: [{ podSelector: { matchLabels: { app: customer-service } } }]
+#     ports: [{ port: 5001 }]
+#   - to: [{ podSelector: { matchLabels: { app: product-service } } }]
+#     ports: [{ port: 5002 }]
+#   - to: [{ podSelector: { matchLabels: { app: payment-service } } }]
+#     ports: [{ port: 5004 }]
+#   - to: [{ podSelector: { matchLabels: { app: mongodb } } }]
+#     ports: [{ port: 27017 }]
+#   - to: [{ podSelector: { matchLabels: { app: rabbitmq } } }]
+#     ports: [{ port: 5672 }]

@@ -1,0 +1,7 @@
+project_id      = "your-gcp-project-id"
+project_name    = "ecommerce"
+env             = "dev"
+region          = "us-central1"
+zone            = "us-central1-a"
+cluster_name    = "ecommerce-gke"
+kubernetes_version = "1.29"

@@ -1,0 +1,11 @@
+# Minimal Loki for learning — filesystem storage, single replica
+loki:
+  persistence:
+    enabled: false
+  commonConfig:
+    replication_factor: 1
+singleBinary:
+  replicas: 1
+monitoring:
+  selfMonitoring:
+    enabled: false
