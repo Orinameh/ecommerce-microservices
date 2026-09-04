@@ -2,28 +2,32 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: ecommerce
 resources:
-  - ../../base
+- ../../base
 # Production overlay — immutable SHA tags (never :latest), higher replicas/resources
 # CI updates these via: kustomize edit set image ghcr.io/your-org/customer-service=ghcr.io/${{ github.repository_owner }}/customer-service:${TAG}
 # in infra/k8s/overlays/production (see .github/workflows/ci.yml update-k8s job)
 images:
-  - name: ghcr.io/your-org/customer-service
-    newTag: v1.0.0
-  - name: ghcr.io/your-org/product-service
-    newTag: v1.0.0
-  - name: ghcr.io/your-org/order-service
-    newTag: v1.0.0
-  - name: ghcr.io/your-org/payment-service
-    newTag: v1.0.0
+- name: ghcr.io/your-org/customer-service
+  newName: ghcr.io/Orinameh/customer-service
+  newTag: 52d4897
+- name: ghcr.io/your-org/order-service
+  newName: ghcr.io/Orinameh/order-service
+  newTag: 52d4897
+- name: ghcr.io/your-org/payment-service
+  newName: ghcr.io/Orinameh/payment-service
+  newTag: 52d4897
+- name: ghcr.io/your-org/product-service
+  newName: ghcr.io/Orinameh/product-service
+  newTag: 52d4897
 replicas:
-  - name: customer-service
-    count: 2
-  - name: product-service
-    count: 2
-  - name: order-service
-    count: 3
-  - name: payment-service
-    count: 3
+- count: 2
+  name: customer-service
+- count: 2
+  name: product-service
+- count: 3
+  name: order-service
+- count: 3
+  name: payment-service
 # Example production patch (uncomment to enforce):
 # patches:
 #   - path: ingress-patch.yaml
