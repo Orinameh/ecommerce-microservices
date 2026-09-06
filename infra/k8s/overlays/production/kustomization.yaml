@@ -4,19 +4,19 @@ namespace: ecommerce
 resources:
 - ../../base
 # Production overlay — immutable SHA tags (never :latest), higher replicas/resources
-# CI updates these via: kustomize edit set image ghcr.io/orinameh/customer-service=ghcr.io/${{ github.repository_owner }}/customer-service:${TAG}
+# CI updates these via: kustomize edit set image ghcr.io/Orinameh/customer-service:91c78dc
 # in infra/k8s/overlays/production (see .github/workflows/ci.yml update-k8s job)
 images:
-- name: ghcr.io/orinameh/customer-service
+- name: ghcr.io/Orinameh/customer-service:91c78dc
   newName: ghcr.io/Orinameh/customer-service
   newTag: 52d4897
-- name: ghcr.io/orinameh/order-service
+- name: ghcr.io/Orinameh/order-service:91c78dc
   newName: ghcr.io/Orinameh/order-service
   newTag: 52d4897
-- name: ghcr.io/orinameh/payment-service
+- name: ghcr.io/Orinameh/payment-service:91c78dc
   newName: ghcr.io/Orinameh/payment-service
   newTag: 52d4897
-- name: ghcr.io/orinameh/product-service
+- name: ghcr.io/Orinameh/product-service:91c78dc
   newName: ghcr.io/Orinameh/product-service
   newTag: 52d4897
 replicas:
