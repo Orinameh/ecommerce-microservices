@@ -15,7 +15,7 @@ infra/k8s/
 │   ├── order-service/{deployment,service}.yaml (5003)
 │   ├── payment-service/{deployment,service}.yaml (5004)
 │   ├── transaction-worker/deployment.yaml
-│   └── kustomization.yaml # images: ghcr.io/your-org/*:v1.0.0 (never :latest; overlay overrides to SHA)
+│   └── kustomization.yaml # images: ghcr.io/orinameh/*:v1.0.0 (never :latest; overlay overrides to SHA)
 └── overlays/
     ├── dev/kustomization.yaml        # replicas:1, same images
     └── production/kustomization.yaml # replicas:2-3, SHA via CI, commonLabels env:production
@@ -23,7 +23,7 @@ infra/k8s/
 
 ## Prereqs
 - Docker + k3d / minikube / kind + kubectl + kustomize
-- Images: `docker build -f services/<service>/Dockerfile -t ghcr.io/your-org/<service>:$(git rev-parse --short HEAD) .` (or `:v1.0.0` semver — never `:latest`; CI `.github/workflows/ci.yml` does this automatically)
+- Images: `docker build -f services/<service>/Dockerfile -t ghcr.io/orinameh/<service>:$(git rev-parse --short HEAD) .` (or `:v1.0.0` semver — never `:latest`; CI `.github/workflows/ci.yml` does this automatically)
 
 ## Quick Start
 
@@ -76,7 +76,7 @@ docker compose up --build
 - `mongodb`/`rabbitmq` are `StatefulSet` with PVCs (was `mongodb_data`/`rabbitmq_data` volumes).
 - Healthchecks map to `docker-compose.yaml` `wget /health` probes.
 - Ingress `ecommerce.local` → `/api/*` (compose exposes `localhost:5001-5004` directly).
-- Images must be pushed to registry for remote clusters: `docker push ghcr.io/your-org/<service>:$(git rev-parse --short HEAD)` (CI pushes SHA + immutable tag via `docker/metadata-action`, never `:latest`). For ECR/GAR see `infra/aws`/`gcp` README.
+- Images must be pushed to registry for remote clusters: `docker push ghcr.io/orinameh/<service>:$(git rev-parse --short HEAD)` (CI pushes SHA + immutable tag via `docker/metadata-action`, never `:latest`). For ECR/GAR see `infra/aws`/`gcp` README.
 
 ## Why Base/Overlays
 

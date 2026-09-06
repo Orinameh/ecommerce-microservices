@@ -73,7 +73,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Single GitOps commit — aligns infra/k8s/* (ghcr.io/your-org/...:v1.0.0) with GHCR's ghcr.io/${{ github.repository_owner }}/...:sha-xxxx
+  # Single GitOps commit — aligns infra/k8s/* (ghcr.io/orinameh/...:v1.0.0) with GHCR's ghcr.io/${{ github.repository_owner }}/...:sha-xxxx
   update-k8s:
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -95,13 +95,13 @@ jobs:
           for svc in customer-service product-service order-service payment-service; do
             # kustomize edit set image equivalent via yq/sed — updates newTag and newName
             if command -v yq >/dev/null 2>&1; then
-              yq -i ".images |= map(select(.name == \"ghcr.io/your-org/$svc\") .newTag = env(TAG) | .newName = \"ghcr.io/${{ github.repository_owner }}/$svc\")" infra/k8s/overlays/production/kustomization.yaml 2>/dev/null || \
-              sed -i "s|ghcr.io/your-org/$svc.*|ghcr.io/${{ github.repository_owner }}/$svc:${{ env.TAG }}|g" infra/k8s/overlays/production/kustomization.yaml
+              yq -i ".images |= map(select(.name == \"ghcr.io/orinameh/$svc\") .newTag = env(TAG) | .newName = \"ghcr.io/${{ github.repository_owner }}/$svc\")" infra/k8s/overlays/production/kustomization.yaml 2>/dev/null || \
+              sed -i "s|ghcr.io/orinameh/$svc.*|ghcr.io/${{ github.repository_owner }}/$svc:${{ env.TAG }}|g" infra/k8s/overlays/production/kustomization.yaml
             else
               sed -i.bak "s|newTag:.*|newTag: ${{ env.TAG }}|g" infra/k8s/overlays/production/kustomization.yaml
               # Ensure newName is correct
               if ! grep -q "${{ github.repository_owner }}/$svc" infra/k8s/overlays/production/kustomization.yaml; then
-                sed -i.bak "s|ghcr.io/your-org/$svc|ghcr.io/${{ github.repository_owner }}/$svc|g" infra/k8s/overlays/production/kustomization.yaml
+                sed -i.bak "s|ghcr.io/orinameh/$svc|ghcr.io/${{ github.repository_owner }}/$svc|g" infra/k8s/overlays/production/kustomization.yaml
               fi
             fi
           done

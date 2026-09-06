@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: ghcr.io/your-org/order-service:v1.0.0 # CI overrides with SHA
+          image: ghcr.io/orinameh/order-service:v1.0.0 # CI overrides with SHA
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5003

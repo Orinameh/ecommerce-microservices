@@ -5,13 +5,13 @@ resources:
   - ../../base
 # Dev overlay — single replica, lighter, uses same SHA tags via base (or local v1.0.0)
 images:
-  - name: ghcr.io/your-org/customer-service
+  - name: ghcr.io/orinameh/customer-service
     newTag: v1.0.0
-  - name: ghcr.io/your-org/product-service
+  - name: ghcr.io/orinameh/product-service
     newTag: v1.0.0
-  - name: ghcr.io/your-org/order-service
+  - name: ghcr.io/orinameh/order-service
     newTag: v1.0.0
-  - name: ghcr.io/your-org/payment-service
+  - name: ghcr.io/orinameh/payment-service
     newTag: v1.0.0
 replicas:
   - name: customer-service

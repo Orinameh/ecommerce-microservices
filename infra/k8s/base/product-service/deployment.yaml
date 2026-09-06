@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: ghcr.io/your-org/product-service:v1.0.0 # CI overrides with SHA
+          image: ghcr.io/orinameh/product-service:v1.0.0 # CI overrides with SHA
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5002

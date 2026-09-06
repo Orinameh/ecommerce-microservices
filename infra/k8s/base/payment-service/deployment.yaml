@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: payment-service
-          image: ghcr.io/your-org/payment-service:v1.0.0 # CI overrides with SHA
+          image: ghcr.io/orinameh/payment-service:v1.0.0 # CI overrides with SHA
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5004

@@ -132,7 +132,7 @@ infra/
 │   │   ├── order-service/{deployment,service}.yaml (5003)
 │   │   ├── payment-service/{deployment,service}.yaml (5004)
 │   │   ├── transaction-worker/deployment.yaml
-│   │   └── kustomization.yaml # images: ghcr.io/your-org/*:v1.0.0 (never :latest)
+│   │   └── kustomization.yaml # images: ghcr.io/orinameh/*:v1.0.0 (never :latest)
 │   └── overlays/
 │       ├── dev/kustomization.yaml        # replicas:1, same images
 │       └── production/kustomization.yaml # replicas:2-3, SHA via CI, commonLabels env:production
@@ -159,8 +159,8 @@ bash test-flow.sh # amount=price per order.service.ts:48 strict check, Idempoten
 k3d cluster create ecommerce --port 8080:80@loadbalancer
 # build images (same Dockerfiles, SHA tag — never :latest, CI does this)
 for s in customer-service product-service order-service payment-service; do
-  docker build -f services/$s/Dockerfile -t ghcr.io/your-org/$s:$(git rev-parse --short HEAD) .
-  k3d image import ghcr.io/your-org/$s:$(git rev-parse --short HEAD) -c ecommerce
+  docker build -f services/$s/Dockerfile -t ghcr.io/orinameh/$s:$(git rev-parse --short HEAD) .
+  k3d image import ghcr.io/orinameh/$s:$(git rev-parse --short HEAD) -c ecommerce
 done
 cp infra/k8s/base/secrets.example.yaml infra/k8s/base/secrets.yaml # edit MONGODB_URI (gitignored)
 # dev overlay (1 replica, fast)
