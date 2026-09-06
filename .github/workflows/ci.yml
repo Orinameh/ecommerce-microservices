@@ -27,13 +27,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.7.1
 
-      - name: Set SHA tag
-        id: tag
-        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      # DEAD CODE: unused - Build uses docker/metadata-action outputs (steps.meta.outputs.tags) instead
+      # - name: Set SHA tag
+      #   id: tag
+      #   run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Docker meta (lowercase, SHA — never :latest)
         id: meta
-        uses: docker/metadata-action@v5.7.0
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
           tags: |
