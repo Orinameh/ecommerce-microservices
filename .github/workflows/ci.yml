@@ -263,10 +263,12 @@ jobs:
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
-          helm lint infra/argocd --values infra/argocd/values.yaml || helm lint argo/argo-cd --version 7.8.0 --values infra/argocd/values.yaml
-          # kube-prometheus-stack values are defaults + overrides from monitoring/README — lint chart itself
-          helm template test prometheus-community/kube-prometheus-stack --version 71.1.0 --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false > /tmp/kube-prom.yaml
-          echo "Helm lint/template OK"
+          # infra/argocd is values only, not a chart — template remote chart with values to validate
+          helm template argocd argo/argo-cd --version 7.8.0 -f infra/argocd/values.yaml > /tmp/argocd.yaml
+          helm template kube-prom prometheus-community/kube-prometheus-stack --version 71.1.0 \
+            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+            --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false > /tmp/kube-prom.yaml
+          echo "Helm lint/template OK — argo $(( $(wc -l < /tmp/argocd.yaml) )) lines, kube-prom $(( $(wc -l < /tmp/kube-prom.yaml) )) lines"
 
       - name: Set up kubectl (for deploy)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
