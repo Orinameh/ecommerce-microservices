@@ -1,0 +1,89 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ecommerce-slo
+  namespace: ecommerce
+  labels:
+    app: ecommerce-microservices
+    release: kube-prom
+    prometheus: kube-prom
+spec:
+  groups:
+  # ── SLO / Golden Signals ─────────────────────────────────────
+  - name: ecommerce.slo
+    interval: 30s
+    rules:
+    # High error rate: 5xx >5% for 5m → critical (SLO burn)
+    - alert: EcommerceHighErrorRate
+      expr: |
+        sum by (service) (rate(http_requests_total{status_code=~"5.."}[5m]))
+        /
+        sum by (service) (rate(http_requests_total[5m])) > 0.05
+      for: 5m
+      labels: {severity: critical, slo: "availability"}
+      annotations:
+        summary: "{{ $labels.service }} 5xx >5% for 5m"
+        description: "Service {{ $labels.service }} failing SLO — 5xx ratio {{ $value | humanizePercentage }}. Check kubectl logs -n ecommerce deploy/{{ $labels.service }}"
+        runbook_url: "https://github.com/Orinameh/ecommerce-microservices/wiki/runbook#high-error-rate"
+
+    # High latency p95 >500ms for 5m → warning
+    - alert: EcommerceHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))
+        ) > 0.5
+      for: 5m
+      labels: {severity: warning, slo: "latency"}
+      annotations:
+        summary: "{{ $labels.service }} p95 >500ms"
+        description: "p95 latency {{ $value | humanizeDuration }} on {{ $labels.service }}. Check DB slow queries / RabbitMQ lag."
+
+    # Availability: pod not ready / crash looping
+    - alert: EcommercePodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="ecommerce"}[15m]) > 0
+      for: 5m
+      labels: {severity: warning}
+      annotations:
+        summary: "Pod {{ $labels.pod }} crash looping"
+        description: "Container {{ $labels.container }} in {{ $labels.pod }} restarting {{ $value | humanize }} /s. kubectl describe pod -n ecommerce {{ $labels.pod }}"
+
+    - alert: EcommerceDeploymentReplicasMismatch
+      expr: kube_deployment_status_replicas_available{namespace="ecommerce"} < kube_deployment_spec_replicas{namespace="ecommerce"}
+      for: 10m
+      labels: {severity: critical}
+      annotations:
+        summary: "Deployment {{ $labels.deployment }} not fully available"
+
+  - name: ecommerce.infra
+    interval: 30s
+    rules:
+    - alert: EcommerceHighMemory
+      expr: (container_memory_working_set_bytes{namespace="ecommerce",container!=""} / container_spec_memory_limit_bytes{namespace="ecommerce",container!=""}) > 0.85
+      for: 10m
+      labels: {severity: warning}
+      annotations: {summary: "Container {{ $labels.container }} memory >85% limit"}
+
+    - alert: MongoDown
+      expr: up{job="ecommerce-mongodb"} == 0 or absent(up{job="ecommerce-mongodb"})
+      for: 2m
+      labels: {severity: critical}
+      annotations: {summary: "MongoDB down — all services degraded"}
+
+    - alert: RabbitMQDown
+      expr: up{job="ecommerce-rabbitmq"} == 0 or absent(up{job="ecommerce-rabbitmq"})
+      for: 2m
+      labels: {severity: critical}
+      annotations: {summary: "RabbitMQ down — order/payment async degraded"}
+
+    - alert: RabbitMQQueueDepthHigh
+      # Requires rabbitmq_prometheus plugin; falls back to no data if exporter missing
+      expr: rabbitmq_queue_messages{namespace="ecommerce"} > 1000
+      for: 5m
+      labels: {severity: warning}
+      annotations: {summary: "Queue {{ $labels.queue }} depth {{ $value }} — consumer lag"}
+
+    - alert: KubeJobFailed
+      expr: kube_job_failed{namespace="ecommerce"} > 0
+      for: 5m
+      labels: {severity: warning}
+      annotations: {summary: "Job {{ $labels.job_name }} failed"}

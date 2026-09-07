@@ -1,0 +1,56 @@
+# Example Alertmanager config for Slack + PagerDuty (Kube-Prometheus 2026)
+# Apply via: helm upgrade kube-prom ... -f infra/k8s/base/monitoring/alertmanager-values.yaml
+# Never commit real webhook URLs — use ExternalSecrets / SealedSecrets or `kubectl create secret`.
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-kube-prom-kube-pm-alertmanager
+  namespace: monitoring
+stringData:
+  alertmanager.yaml: |
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: [alertname, service, severity]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: slack-warn
+      routes:
+      - matchers: ['severity="critical"']
+        receiver: pagerduty-critical
+        continue: true
+      - matchers: ['severity="critical"']
+        receiver: slack-critical
+      - matchers: ['severity="warning"']
+        receiver: slack-warn
+    receivers:
+    - name: slack-warn
+      slack_configs:
+      - api_url: "https://hooks.slack.com/services/REPLACE/ME"
+        channel: "#alerts-ecommerce"
+        send_resolved: true
+        title: '{{ .GroupLabels.alertname }} [{{ .GroupLabels.severity }}]'
+        text: '{{ range .Alerts }}{{ .Annotations.description }} runbook: {{ .Annotations.runbook_url }}{{ end }}'
+    - name: slack-critical
+      slack_configs:
+      - api_url: "https://hooks.slack.com/services/REPLACE/ME"
+        channel: "#alerts-ecommerce-critical"
+        send_resolved: true
+    - name: pagerduty-critical
+      pagerduty_configs:
+      - service_key: "REPLACE_PAGERDUTY_INTEGRATION_KEY"
+        send_resolved: true
+        description: '{{ .GroupLabels.alertname }} {{ .GroupLabels.service }}'
+---
+# Helm values snippet to mount above Secret (if using kube-prometheus-stack):
+# alertmanager:
+#   config:
+#     global:
+#       resolve_timeout: 5m
+#   alertmanagerSpec:
+#     externalUrl: https://alertmanager.yourdomain.com
+#   ingress:
+#     enabled: true
+#     ingressClassName: nginx

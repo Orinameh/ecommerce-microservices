@@ -20,6 +20,11 @@ resources:
   - payment-service/deployment.yaml
   - transaction-worker/deployment.yaml
   - ingress.yaml
+  # Monitoring (requires kube-prometheus-stack CRDs: monitoring.coreos.com/v1)
+  # Deploy stack first: helm install kube-prom ... then: kubectl apply -k infra/k8s/base/monitoring
+  - monitoring/service-monitor.yaml
+  - monitoring/prometheus-rules.yaml
+  - monitoring/grafana-dashboard.yaml
 # Never use :latest — immutable tags only (semver or git SHA). Override via:
 # kustomize edit set image ghcr.io/orinameh/customer-service=ghcr.io/orinameh/customer-service:$(git rev-parse --short HEAD)
 images:

@@ -1,0 +1,57 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-services
+  namespace: ecommerce
+  labels:
+    app: ecommerce-microservices
+    release: kube-prom # must match kube-prometheus-stack serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app: ecommerce-microservices # set via kustomize commonLabels:35
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+    honorLabels: true
+    scheme: http
+    # Relabel to keep service dimension
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_label_app]
+      targetLabel: service
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-mongodb
+  namespace: ecommerce
+  labels:
+    app: mongodb
+    release: kube-prom
+spec:
+  selector:
+    matchLabels:
+      app: mongodb
+  endpoints:
+  - port: metrics # requires mongodb-exporter sidecar or enable in statefulset
+    interval: 30s
+    path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-rabbitmq
+  namespace: ecommerce
+  labels:
+    app: rabbitmq
+    release: kube-prom
+spec:
+  selector:
+    matchLabels:
+      app: rabbitmq
+  endpoints:
+  - port: metrics # rabbitmq_management with prometheus plugin: rabbitmq_prometheus
+    interval: 15s
+    path: /metrics

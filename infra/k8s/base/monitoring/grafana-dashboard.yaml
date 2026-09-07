@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1" # kube-prometheus-stack default label to auto-import
+data:
+  ecommerce.json: |
+    {
+      "title": "Ecommerce Microservices — Golden Signals",
+      "tags": ["ecommerce"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Request Rate (req/s) by service & code",
+          "targets": [{"expr": "sum by (service, status_code) (rate(http_requests_total[5m]))"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "p50 / p95 Latency",
+          "targets": [
+            {"expr": "histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))"},
+            {"expr": "histogram_quantile(0.50, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))"}
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Error Rate 5xx %",
+          "targets": [{"expr": "sum by (service) (rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum by (service) (rate(http_requests_total[5m]))"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Pod Restarts / CPU / Memory",
+          "targets": [
+            {"expr": "sum by (pod) (rate(kube_pod_container_status_restarts_total{namespace=\"ecommerce\"}[5m]))"},
+            {"expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"ecommerce\"}[5m]))"},
+            {"expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"ecommerce\"})"}
+          ]
+        }
+      ]
+    }
