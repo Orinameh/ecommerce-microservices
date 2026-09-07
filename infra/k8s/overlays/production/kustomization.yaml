@@ -4,7 +4,7 @@ namespace: ecommerce
 resources:
 - ../../base
 # Production overlay — immutable SHA tags (never :latest), higher replicas/resources
-# CI updates these via: kustomize edit set image ghcr.io/orinameh/customer-service:1edb153
+# CI updates these via: kustomize edit set image ghcr.io/orinameh/customer-service:fc16a2f
 # in infra/k8s/overlays/production (see .github/workflows/ci.yml update-k8s job)
 images:
 - name: ghcr.io/orinameh/customer-service
