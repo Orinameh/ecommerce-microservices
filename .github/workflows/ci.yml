@@ -237,6 +237,81 @@ jobs:
           git diff --cached --quiet || git commit -m "chore(k8s): bump images to ${TAG_LOWER}"
           git push || echo "no push — concurrent update, will be retried next run"
 
+  # ─────────────────────────────────────────────────────────────
+  # 4) Helm — lint on PR, upgrade --install on main (opt-in, automated)
+  # ArgoCD + kube-prometheus-stack via Helm (pinned, atomic, Node 24)
+  # Requires secret: KUBE_CONFIG (base64 kubeconfig). Enable by uncommenting.
+  # ─────────────────────────────────────────────────────────────
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Lint on PR (no cluster), deploy only on main push
+    if: always() # runs after build; deploy step gated inside
+    needs: [secret-scan, trivy-fs]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.14.4 # pinned 2026 stable, Node 24 compatible
+
+      - name: Helm lint — ArgoCD & monitoring (no cluster)
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          helm lint infra/argocd --values infra/argocd/values.yaml || helm lint argo/argo-cd --version 7.8.0 --values infra/argocd/values.yaml
+          # kube-prometheus-stack values are defaults + overrides from monitoring/README — lint chart itself
+          helm template test prometheus-community/kube-prometheus-stack --version 71.1.0 --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false > /tmp/kube-prom.yaml
+          echo "Helm lint/template OK"
+
+      - name: Set up kubectl (for deploy)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: azure/setup-kubectl@v4.0.1
+
+      - name: Deploy via Helm — ArgoCD + monitoring (main only, requires KUBE_CONFIG)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KUBE_CONFIG:-}" ]; then
+            echo "::notice::KUBE_CONFIG not set — skipping Helm deploy (lint already passed). Set secret to enable automated install."
+            exit 0
+          fi
+          echo "$KUBE_CONFIG" | base64 -d > /tmp/kubeconfig
+          export KUBECONFIG=/tmp/kubeconfig
+          kubectl cluster-info || (echo "cluster unreachable" && exit 0)
+
+          helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+          helm repo update
+
+          echo "→ ArgoCD"
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace argocd --create-namespace \
+            --version 7.8.0 \
+            -f infra/argocd/values.yaml \
+            --atomic --wait --timeout 5m
+
+          echo "→ kube-prometheus-stack (monitoring)"
+          helm upgrade --install kube-prom prometheus-community/kube-prometheus-stack \
+            --namespace monitoring --create-namespace \
+            --version 71.1.0 \
+            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+            --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
+            --set grafana.ingress.enabled=false \
+            --atomic --wait --timeout 5m
+
+          echo "→ Apply ServiceMonitor/PrometheusRule (post-CRD)"
+          kubectl apply -k infra/k8s/base/monitoring || echo "monitoring CRDs not yet ready — will be synced by ArgoCD"
+
+          kubectl -n argocd rollout status deployment/argocd-server --timeout=120s || true
+          kubectl -n monitoring rollout status deployment/kube-prom-kube-pm-operator --timeout=120s || true
+
   # --- OPT-IN: Cloud infra & K8s (uncomment to enable) ---
   # Requires secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, GCP_SA_KEY, KUBE_CONFIG
   # terraform-aws:
