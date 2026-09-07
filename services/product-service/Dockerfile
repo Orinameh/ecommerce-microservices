@@ -15,7 +15,7 @@ RUN cd services/product-service && bun build src/index.ts --outdir ./dist --targ
 
 FROM node:26-alpine AS runner
 
-RUN apk add --no-cache wget
+RUN apk update && apk upgrade --no-cache && apk add --no-cache wget && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
@@ -24,6 +24,7 @@ COPY --from=builder /app/services/product-service/node_modules ./node_modules
 COPY services/product-service/package.json ./
 
 RUN npm prune --omit=dev || true
+RUN npm audit fix --omit=dev || npm update brace-expansion ip-address tar --omit=dev || true
 
 USER node
 

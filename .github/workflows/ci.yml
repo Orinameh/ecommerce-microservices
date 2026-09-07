@@ -155,9 +155,8 @@ jobs:
           severity: 'CRITICAL,HIGH'
           vuln-type: 'os,library'
           ignore-unfixed: true
-          exit-code: '1' # blocking gate — change to '0' for advisory
+          exit-code: '1' # blocking — fixed at Dockerfile via apk upgrade (libssl3/libcrypto3 3.5.7->3.5.8 on alpine 3.24)
           # To allowlist CVEs: add to .trivyignore with justification + expiry
-
       - name: Upload Trivy SARIF to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()

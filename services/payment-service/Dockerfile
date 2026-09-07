@@ -16,7 +16,7 @@ RUN cd services/payment-service && bun build src/workers/transaction.worker.ts -
 
 FROM node:26-alpine AS runner
 
-RUN apk add --no-cache wget
+RUN apk update && apk upgrade --no-cache && apk add --no-cache wget && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
@@ -25,6 +25,7 @@ COPY --from=builder /app/services/payment-service/node_modules ./node_modules
 COPY services/payment-service/package.json ./
 
 RUN npm prune --omit=dev || true
+RUN npm audit fix --omit=dev || npm update brace-expansion ip-address tar --omit=dev || true
 
 USER node
 
