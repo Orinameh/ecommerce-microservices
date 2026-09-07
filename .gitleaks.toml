@@ -1,0 +1,37 @@
+# Gitleaks config — tuned for this repo to avoid false positives
+# See: https://github.com/gitleaks/gitleaks#configuration
+title = "ecommerce-microservices gitleaks config"
+
+# Path-scoped allowlists — generic regexes like `password` are NOT allowed globally
+# Each rule explains why it is safe to commit.
+
+[[allowlist]]
+  description = "docker-compose local dev placeholder — real creds in .env (gitignored)"
+  paths = ['''docker-compose\.yaml''']
+  regexes = [
+    '''MONGO_INITDB_ROOT_PASSWORD:\s*password\b''',
+  ]
+
+[[allowlist]]
+  description = "example env file — placeholders only, no real secrets"
+  paths = ['''\.env\.example''']
+  regexes = [
+    '''YOUR_STRONG_PASSWORD''',
+  ]
+
+[[allowlist]]
+  description = "k8s configmap placeholders and historical ghcr.io/orinameh image names"
+  paths = ['''infra/k8s/base/configmap\.yaml''', '''infra/k8s/overlays/production/kustomization\.yaml''', '''README\.md''']
+  regexes = [
+    '''ghcr\.io/orinameh''',
+  ]
+
+# Allowlist committed configs themselves — not a leak
+[[allowlist]]
+  description = "gitleaks/trivy config files"
+  paths = ['''\.gitleaks\.toml''', '''\.trivyignore''']
+
+# Optionally allow specific rotated commits
+# [[allowlist]]
+#   commits = ["abc123..."]
+#   reason = "rotated and revoked, 2026-03-20"

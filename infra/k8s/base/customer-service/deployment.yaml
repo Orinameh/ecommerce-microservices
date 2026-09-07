@@ -19,7 +19,7 @@ spec:
         - name: customer-service
           # Build from project root: docker build -f services/customer-service/Dockerfile -t ghcr.io/orinameh/customer-service:v1.0.0 .
           image: ghcr.io/orinameh/customer-service:v1.0.0 # CI overrides via kustomize edit set image ...:${GITHUB_SHA} — never :latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always # must be Always for immutable SHA tags
           ports:
             - containerPort: 5001
           env:

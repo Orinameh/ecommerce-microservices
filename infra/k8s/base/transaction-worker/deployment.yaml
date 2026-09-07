@@ -17,7 +17,7 @@ spec:
         - name: worker
           # Uses same image as payment-service (Dockerfile builds both) - must use same immutable tag, never :latest
           image: ghcr.io/orinameh/payment-service:v1.0.0 # CI overrides with SHA
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["node", "dist/workers/transaction.worker.js"]
           env:
             - name: NODE_ENV

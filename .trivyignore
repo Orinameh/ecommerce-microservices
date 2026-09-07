@@ -1,0 +1,4 @@
+# Trivy allowlist — add CVEs here only with justification + expiry
+# Format: CVE-YYYY-NNNN # justification, ticket, expiry date
+# Example:
+# CVE-2024-12345 # false positive in node:26-alpine wget, https://github.com/.../issues/123, expires 2026-12-31

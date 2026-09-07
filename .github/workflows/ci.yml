@@ -6,16 +6,87 @@ on:
   pull_request:
     branches: [main]
 
+# least-privilege default
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
 
+# Cancel superseded PR runs, but never cancel main
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  build-and-push:
+  # ─────────────────────────────────────────────────────────────
+  # 1) Leaked secrets — fail-fast before any build
+  # ─────────────────────────────────────────────────────────────
+  secret-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout (full history for gitleaks)
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks — detect leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─────────────────────────────────────────────────────────────
+  # 2) Trivy FS: repo, Dockerfiles, K8s manifests (secrets + misconfig)
+  # Runs in parallel with secret-scan, no image build needed
+  # ─────────────────────────────────────────────────────────────
+  trivy-fs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Trivy FS — secrets + misconfig (HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0 # ed142fd = v0.36.0, immutable after CVE-2026-33634
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: 'CRITICAL,HIGH'
+          scanners: 'vuln,secret,config'
+          ignore-unfixed: true
+          exit-code: '0' # advisory — image scan below is blocking
+
+      - name: Upload Trivy FS SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  # ─────────────────────────────────────────────────────────────
+  # 3) Build → Trivy image scan → Push (only if scan passes)
+  # Build once with load:true, scan local image, then docker push
+  # No second build — saves ~2× minutes × 4 services
+  # ─────────────────────────────────────────────────────────────
+  build-and-push:
+    needs: [secret-scan, trivy-fs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+      security-events: write
     strategy:
+      fail-fast: false
+      max-parallel: 4
       matrix:
         service: [customer-service, product-service, order-service, payment-service]
     steps:
@@ -27,14 +98,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.7.1
 
-      # DEAD CODE: unused - Build uses docker/metadata-action outputs (steps.meta.outputs.tags) instead
+      # DEAD CODE: unused — kept for learning — Build uses docker/metadata-action outputs (steps.meta.outputs.tags) instead
       # - name: Set SHA tag
       #   id: tag
       #   run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Docker meta (lowercase, SHA — never :latest)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v5.7.0
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
           tags: |
@@ -42,7 +113,7 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -68,51 +139,104 @@ jobs:
         with:
           context: .
           file: services/${{ matrix.service }}/Dockerfile
-          push: ${{ github.event_name == 'push' }}
+          load: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
 
-  # Single GitOps commit — aligns infra/k8s/* (ghcr.io/orinameh/...:v1.0.0) with GHCR's ghcr.io/${{ github.repository_owner }}/...:sha-xxxx
+      - name: Trivy — scan image for HIGH/CRITICAL vulns
+        uses: aquasecurity/trivy-action@v0.36.0 # ed142fd0673e97e23eac54620cfb913e5ce36c25 = v0.36.0
+        with:
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: 'sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          exit-code: '1' # blocking gate — change to '0' for advisory
+          # To allowlist CVEs: add to .trivyignore with justification + expiry
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
+      - name: Also output human-readable table to logs (non-blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        if: always()
+        with:
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Push already-scanned image to GHCR (no rebuild)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n' | while read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "Pushing $tag"
+            docker push "$tag"
+          done
+
+  # Single GitOps commit — aligns infra/k8s/* with GHCR's ghcr.io/<owner>/...:sha-xxxx
   update-k8s:
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
+    concurrency:
+      group: update-k8s-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set SHA tag
         run: echo "TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Update k8s manifests to SHA (overlays/production)
         run: |
-          # yq is Node 24 compatible, no kustomize Node 20 needed
-          pip install -q yq 2>/dev/null || npm i -g yq 2>/dev/null || true
-          # Use yq/sed to update newTag in infra/k8s/overlays/production/kustomization.yaml
-          # Fallback to sed if yq not available
+          set -euo pipefail
+          # Pinned yq — avoid pip latest breakage
+          pip install -q "yq==3.4.3" 2>/dev/null || npm i -g yq@3 2>/dev/null || true
+
+          # Ensure we are up-to-date before committing
+          git pull --rebase origin main || true
+
+          TAG_LOWER=$(echo "${{ env.TAG }}" | tr '[:upper:]' '[:lower:]')
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
           for svc in customer-service product-service order-service payment-service; do
-            # kustomize edit set image equivalent via yq/sed — updates newTag and newName
+            # normalize: kustomization.yaml now uses lowercase ghcr.io/<owner>
+            # select is case-insensitive via lowercasing — use sed fallback if yq fails
             if command -v yq >/dev/null 2>&1; then
-              yq -i ".images |= map(select(.name == \"ghcr.io/orinameh/$svc\") .newTag = env(TAG) | .newName = \"ghcr.io/${{ github.repository_owner }}/$svc\")" infra/k8s/overlays/production/kustomization.yaml 2>/dev/null || \
-              sed -i "s|ghcr.io/orinameh/$svc.*|ghcr.io/${{ github.repository_owner }}/$svc:${{ env.TAG }}|g" infra/k8s/overlays/production/kustomization.yaml
-            else
-              sed -i.bak "s|newTag:.*|newTag: ${{ env.TAG }}|g" infra/k8s/overlays/production/kustomization.yaml
-              # Ensure newName is correct
-              if ! grep -q "${{ github.repository_owner }}/$svc" infra/k8s/overlays/production/kustomization.yaml; then
-                sed -i.bak "s|ghcr.io/orinameh/$svc|ghcr.io/${{ github.repository_owner }}/$svc|g" infra/k8s/overlays/production/kustomization.yaml
-              fi
+              # update both legacy Orinameh and new owner entries
+              yq -i "(.images[] | select(.name | test(\"ghcr.io/(orinameh|$OWNER_LOWER)/$svc\"; \"i\")) | .newTag) = strenv(TAG_LOWER)" infra/k8s/overlays/production/kustomization.yaml 2>/dev/null || true
+              yq -i "(.images[] | select(.name | test(\"ghcr.io/(orinameh|$OWNER_LOWER)/$svc\"; \"i\")) | .newName) = \"ghcr.io/$OWNER_LOWER/$svc\"" infra/k8s/overlays/production/kustomization.yaml 2>/dev/null || true
             fi
+            # sed fallback — case-insensitive, handles both old and new names
+            sed -i.bak -E "s|ghcr\.io/[^/]+/$svc:[^[:space:]'\"]+|ghcr.io/$OWNER_LOWER/$svc:$TAG_LOWER|I" infra/k8s/overlays/production/kustomization.yaml || true
           done
-          # Also handle base if needed
+
+          echo "--- updated kustomization ---"
           cat infra/k8s/overlays/production/kustomization.yaml
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add infra/k8s/overlays/production/kustomization.yaml
-          git diff --cached --quiet || git commit -m "chore(k8s): bump images to ${{ env.TAG }}"
-          git push || echo "no push"
+          git diff --cached --quiet || git commit -m "chore(k8s): bump images to ${TAG_LOWER}"
+          git push || echo "no push — concurrent update, will be retried next run"
 
   # --- OPT-IN: Cloud infra & K8s (uncomment to enable) ---
   # Requires secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, GCP_SA_KEY, KUBE_CONFIG
