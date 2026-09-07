@@ -17,6 +17,8 @@ RUN cd services/payment-service && bun build src/workers/transaction.worker.ts -
 FROM node:26-alpine AS runner
 
 RUN apk update && apk upgrade --no-cache && apk add --no-cache wget && rm -rf /var/cache/apk/*
+# Fix npm High vulns (tar/brace-expansion) in base image's npm 11.19.0 — update to latest
+RUN npm install -g npm@latest && npm cache clean --force
 
 WORKDIR /app
 
@@ -26,6 +28,8 @@ COPY services/payment-service/package.json ./
 
 RUN npm prune --omit=dev || true
 RUN npm audit fix --omit=dev || npm update brace-expansion ip-address tar --omit=dev || true
+# Remove npm itself from final image - its bundled tar/brace-expansion are HIGH vulns not needed at runtime (only node is needed)
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx || true
 
 USER node
 
